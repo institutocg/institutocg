@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Sobe um PostgreSQL temporário, aplica as migrações e roda os testes de
+# integridade do banco. Uso: npm run test:db
+set -euo pipefail
+
+RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
+PG_BIN="${PG_BIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)}"
+PORTA="${PORTA:-54329}"
+DADOS="$(mktemp -d)"
+LOG="$DADOS/postgres.log"
+
+# O PostgreSQL não roda como root: usa o usuário "postgres" quando necessário.
+rodar() {
+  if [ "$(id -u)" = "0" ]; then runuser -u postgres -- "$@"; else "$@"; fi
+}
+
+limpar() {
+  rodar "$PG_BIN/pg_ctl" -D "$DADOS/pg" -m immediate stop >/dev/null 2>&1 || true
+  rm -rf "$DADOS"
+}
+trap limpar EXIT
+
+[ "$(id -u)" = "0" ] && chown postgres "$DADOS"
+rodar "$PG_BIN/initdb" -D "$DADOS/pg" -U postgres --auth=trust -E UTF8 --locale=C.UTF-8 >/dev/null
+rodar "$PG_BIN/pg_ctl" -D "$DADOS/pg" -l "$LOG" -o "-p $PORTA -k $DADOS -c listen_addresses=''" -w start >/dev/null
+
+PSQL=(psql -h "$DADOS" -p "$PORTA" -U postgres -d postgres -v ON_ERROR_STOP=1 -q -X)
+
+echo "→ Simulação do Supabase"
+"${PSQL[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase.sql"
+
+for arquivo in "$RAIZ"/supabase/migrations/*.sql; do
+  echo "→ Migração $(basename "$arquivo")"
+  "${PSQL[@]}" -f "$arquivo"
+done
+
+if [ "${COM_SEED:-1}" = "1" ] && [ -f "$RAIZ/supabase/seed.sql" ]; then
+  echo "→ Dados fictícios (seed.sql)"
+  "${PSQL[@]}" -f "$RAIZ/supabase/seed.sql"
+fi
+
+for arquivo in "$RAIZ"/supabase/tests/[1-9]*.sql; do
+  [ -e "$arquivo" ] || continue
+  echo "→ Testes $(basename "$arquivo")"
+  "${PSQL[@]}" -f "$arquivo" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  /  /'
+done
+
+echo "✓ Banco de dados verificado."

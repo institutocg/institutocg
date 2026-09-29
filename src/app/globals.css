@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Identidade provisória: branco e dourado (ajustar quando o logotipo ficar pronto). */
+:root {
+  --fundo: #fbf9f5;
+  --texto: #2a2723;
+  --dourado: #b08d57;
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-texto: var(--texto);
+  --color-dourado: var(--dourado);
+}
+
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}

@@ -139,7 +139,7 @@ Não haverá: prontuário, odontograma, diagnóstico, anamnese, evolução clín
 - Fuso: `America/Sao_Paulo`; datas de vencimento como `date`, horários como `timestamptz`.
 - Dinheiro: **centavos em `bigint`** — nunca `float`.
 - Telefones em E.164 (`+5511999999999`).
-- IDs `uuid v7` (ordenáveis por tempo).
+- IDs `uuid` (`gen_random_uuid()`).
 - Toda tabela de negócio tem `clinica_id`, `criado_em`, `atualizado_em`, `criado_por`; exclusão é lógica (`arquivado_em`), salvo pedido LGPD.
 
 ### 2.3 Módulos (fronteiras no código)
@@ -324,7 +324,7 @@ status_manual? (cancelada | renegociada)
 **`pagamentos`** — `parcela_id➜, valor_centavos, pago_em, forma, registrado_por➜, observacao`
 (Permite pagamento parcial e mais de um pagamento por parcela.)
 
-**`despesas`** *(opcional, desligado por padrão)* — `descricao, categoria, valor_centavos, vencimento, pago_em?` — para quem quiser um resultado simples "entrou × saiu". Sem conciliação bancária.
+**`despesas`** *(fora da V1 — decidido: controlar só o que a clínica tem a receber)* — `descricao, categoria, valor_centavos, vencimento, pago_em?` — para quem quiser um resultado simples "entrou × saiu". Sem conciliação bancária.
 
 ### 3.6 Tarefas, mensagens e remarketing
 
@@ -408,7 +408,7 @@ erDiagram
 
 **Cardinalidades-chave e por quê:**
 
-- **Pessoa 1 : N Oportunidade** — preserva histórico: quem fechou clareamento e depois orça facetas tem duas oportunidades, com origens e resultados próprios. Regra: no máximo **uma oportunidade aberta por procedimento principal** por pessoa.
+- **Pessoa 1 : N Oportunidade** — preserva histórico: quem fechou clareamento e depois orça facetas tem duas oportunidades, com origens e resultados próprios. Regra: no máximo **uma oportunidade em andamento (aberta ou pausada) por pessoa** — portanto uma única etapa atual; outros procedimentos da mesma conversa entram como interesses secundários.
 - **Oportunidade 1 : N Orçamento** — renegociação gera nova versão (`versao+1`); a anterior fica `substituido`. Só um orçamento `aprovado` por oportunidade.
 - **Orçamento 1 : 0..1 Venda 1 : N Parcela 1 : N Pagamento** — separa o que foi **vendido** (competência) do que foi **recebido** (caixa).
 - **Tarefa → (pessoa obrigatória) + (oportunidade | agendamento | parcela | campanha opcionais)** — a tarefa sabe "de onde veio" e por isso consegue se auto-cancelar quando o contexto muda (ex.: parcela paga cancela a cobrança).
@@ -446,7 +446,7 @@ Menu lateral com 8 itens principais (o restante fica dentro deles):
 - **`LinhaDoTempo`**, **`SeletorEtapa`**, **`BotaoWhatsApp`**, **`EditorMensagem`**, **`EtiquetaStatus`**, **`ValorMonetario`**.
 
 **Diretrizes visuais (premium, não call center):**
-fundo off-white quente; texto grafite; **uma** cor de destaque sóbria (ex.: verde-oliva profundo ou bronze — a alinhar com a marca); títulos em serifada elegante (ex.: *Cormorant* / *Fraunces*) e conteúdo em sans legível (ex.: *Inter*); cantos suaves, sombras mínimas, muito espaço em branco; ícones de linha finos (Lucide); sem vermelho gritante — atrasos em âmbar/terracota; microtextos cordiais ("Tudo em dia por aqui ✓"). Nada de ranking, gamificação ou contadores piscando.
+**branco e dourado** (definição da marca; logotipo em produção): fundo branco/marfim, texto grafite, dourado sóbrio como única cor de destaque (botões principais, detalhes, estados ativos) — nunca dourado "metálico" chamativo; os tons ficam em variáveis de tema para serem ajustados quando o logotipo ficar pronto; títulos em serifada elegante (ex.: *Cormorant* / *Fraunces*) e conteúdo em sans legível (ex.: *Inter*); cantos suaves, sombras mínimas, muito espaço em branco; ícones de linha finos (Lucide); sem vermelho gritante — atrasos em âmbar/terracota; microtextos cordiais ("Tudo em dia por aqui ✓"). Nada de ranking, gamificação ou contadores piscando.
 
 ---
 
@@ -617,7 +617,7 @@ Cadências **nunca** se estendem sozinhas além do último passo: terminam em um
 
 ### 7.7 Agenda
 - Criar agendamento de `avaliacao` move a oportunidade para **Avaliação agendada** (se estiver antes).
-- Confirmação: tarefa na véspera (dia útil anterior; sábado → sexta se a clínica não abre no domingo).
+- Confirmação: tarefa na véspera (dia útil anterior: consulta de segunda → confirmação na sexta, pois a clínica não abre aos sábados).
 - Conflito de horário do mesmo profissional: aviso (não bloqueio), pois a clínica pode encaixar.
 - `compareceu` em avaliação → etapa **Avaliação realizada** + pergunta de orçamento.
 - `ligacao_agendada` é agendamento comercial sem profissional (ex.: "ligar para Paula às 18h").
@@ -642,7 +642,7 @@ Cadências **nunca** se estendem sozinhas além do último passo: terminam em um
 |---|:-:|:-:|
 | Cadastro, contatos, funil, tarefas, agenda, orçamentos | ✅ | ✅ |
 | Registrar pagamentos | ✅ | ✅ |
-| Resumo financeiro e indicadores financeiros | ✅ | ⚙️ a definir (flag `pode_ver_financeiro`) |
+| Resumo financeiro e indicadores financeiros | ✅ | ✅ |
 | Excluir/anonimizar paciente, exportar dados, campanhas | ✅ | ❌ (executa as tarefas das campanhas) |
 | Configurações, usuários, auditoria, ligar reativação | ✅ | ❌ |
 
@@ -931,17 +931,28 @@ Cada etapa termina com algo testável em ambiente de homologação com dados fic
 
 ---
 
+## 14.1 Banco de dados implementado
+
+Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). Ajustes em relação ao texto acima, decididos na implementação:
+
+- **Uma negociação em andamento por pessoa** (índice único), garantindo uma única etapa atual; o histórico de etapas guarda etapa anterior, nova, data, usuário e observação.
+- **Status e resultado da oportunidade derivam da etapa** (gatilho): mover a etapa é a única forma de mudar o estado.
+- **Regras que nunca podem falhar ficam no banco** (gatilhos), valendo para qualquer caminho de escrita: lembrete financeiro por parcela, histórico de etapas, follow-ups automáticos da agenda, último contato, auditoria. As regras de cadência (quando fazer o próximo follow-up) continuam na camada TypeScript.
+- **Formas de pagamento configuráveis** (`formas_pagamento`) + condição **à vista / parcelado**.
+- **Follow-ups imutáveis:** só podem ser anulados com motivo; pagamentos só estornados; contatos arquivados; nada é apagado.
+
 ## 15. Decisões pendentes
 
-**Já respondido:** item 11 confirmado · dois usuários (dona e secretária) · não há planilha, recadastro manual · cadastro separa *Novo contato* de *Paciente antigo* (termo "Novo contato" adotado na interface).
+**Decidido:**
+- Item 11 confirmado (estrutura para crescer sem reescrever).
+- Dois usuários: dona (administradora) e secretária — **a secretária vê o resumo financeiro**.
+- Não há planilha: recadastro manual; cadastro separa *Novo contato* de *Paciente antigo*; termo "Novo contato" na interface.
+- Agenda: **uma profissional** (a dona da clínica); funcionamento **segunda a sexta, 08h–19h**; fechado sábado e domingo.
+- Financeiro: **só contas a receber** na V1 (sem despesas).
+- Visual: **branco e dourado**; logotipo em produção (espaço reservado até lá).
+- Prazos adotados como padrão, ajustáveis em Configurações: primeiro contato em até 15 min no horário comercial; paciente inativo após 12 meses; reativação de quem desistiu após 180 dias; no máximo 1 contato ativo a cada 3 dias e 1 campanha a cada 30 dias por pessoa.
 
-1. **A secretária pode ver o resumo financeiro** (vendido, recebido, em atraso) ou só registrar pagamentos?
-2. **Quem atende na agenda?** Só a dona da clínica, ou há outros dentistas? Horário de funcionamento; abre aos sábados?
-3. **Qual e-mail** cada uma usará para entrar no sistema? (Só no momento de criar os acessos.)
-4. **SLA do primeiro contato** — 15 min em horário comercial está adequado?
-5. **Prazo de "paciente inativo"** — 12 meses? E de reativação para quem *desistiu* — 180 dias?
-6. **Limites de contato** — 1 contato ativo a cada 3 dias e 1 campanha a cada 30 dias por pessoa?
-7. **Despesas** — ligar o controle simples de despesas na V1 ou manter só contas a receber?
-8. **Identidade visual** — manual de marca / logotipo / cores do Instituto CG.
-
-Com essas respostas, o próximo passo é a **Etapa 0 — Fundação**.
+**Ainda em aberto (não bloqueia o início):**
+1. E-mails de acesso de cada usuária (necessários só ao criar os logins).
+2. Feriados em que a clínica fecha (o sistema já considera os feriados nacionais).
+3. Arquivo do logotipo, quando pronto.
