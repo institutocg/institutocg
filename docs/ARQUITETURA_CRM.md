@@ -1,7 +1,7 @@
 # Instituto CG — CRM comercial · Especificação de arquitetura
 
 > **Status:** proposta para aprovação — nenhum código foi escrito ainda.
-> **Data:** 29/09/2026
+> **Data:** 29/09/2026 · **Revisão 2:** tipo de cadastro (novo contato × paciente antigo), recadastramento manual de todos os pacientes, dois usuários.
 > **Relação com `PROPOSTA_V1.md`:** este documento incorpora o novo briefing (foco em leads, remarketing, recuperação, reativação e indicadores) e **substitui** a proposta anterior onde houver diferença. As diferenças estão listadas na seção 13.
 
 ---
@@ -44,9 +44,10 @@ Cada um desses é **receita que já foi conquistada pelo marketing e se perdeu n
 
 | Persona | Perfil | O que precisa |
 |---|---|---|
-| **Operadora comercial** (usuária principal) | Secretária/concierge; não conhece CRM; usa WhatsApp o dia todo. | Abrir o sistema e saber **exatamente o que fazer, com quem, e o que dizer**. Registrar o resultado em 1–2 cliques. |
-| **Gestora / dona** | Decide preços, campanhas, metas. | Ver se a operação está em dia, quanto está em negociação, quanto entrou e por que as pessoas não fecham. |
-| **Dentista** (opcional) | Faz a avaliação e apresenta o orçamento. | Registrar "apresentei orçamento de X" e ver a agenda. |
+| **Secretária** (usuária diária) | Não conhece CRM; usa WhatsApp o dia todo; fará o recadastramento dos pacientes. | Abrir o sistema e saber **exatamente o que fazer, com quem, e o que dizer**. Registrar o resultado em 1–2 cliques. Cadastrar pacientes antigos em sequência, rapidamente. |
+| **Dona da clínica** (administradora) | Decide preços, campanhas, metas; também pode executar tarefas. | Ver se a operação está em dia, quanto está em negociação, quanto entrou e por que as pessoas não fecham. |
+
+Na V1 são **dois usuários**. Os papéis *gestor* e *dentista* continuam previstos no modelo (seção 7.10), mas só serão criados se a equipe crescer.
 
 ### 1.3 Princípios de produto (valem para toda decisão)
 
@@ -214,6 +215,7 @@ Legenda: 🔑 chave · ➜ FK · *(calc)* calculado em view.
 **`pessoas`** — lead **ou** paciente. É a mesma pessoa em momentos diferentes; não se duplica cadastro quando o lead fecha.
 ```
 id🔑, clinica_id➜
+tipo_cadastro (novo_contato | paciente_antigo)  -- escolhido no cadastro (seção 6, F1)
 nome, apelido_tratamento?          -- "Dra. Ana", "Sr. Paulo"
 telefone_e164 (único por clínica, quando presente), whatsapp_e164?, email?
 data_nascimento?  cidade?  bairro?
@@ -224,10 +226,24 @@ consentimento_contato bool                    -- pode receber contato ativo
 consentimento_marketing bool                  -- pode entrar em campanhas/remarketing
 nao_contatar bool + nao_contatar_motivo?      -- bloqueio absoluto
 observacoes_comerciais text (≤ 500, com aviso "sem dados clínicos")
-primeiro_contato_em, ultimo_contato_em, ultimo_atendimento_em
+paciente_desde?                               -- mês/ano aproximado (paciente antigo)
+ultimo_atendimento_informado?                 -- mês/ano informado no recadastro
+ultimo_atendimento_precisao (mes | faixa)     -- "mar/2025" ou "entre 1 e 2 anos"
+em_tratamento bool                            -- informado no recadastro
+primeiro_contato_em, ultimo_contato_em
 arquivado_em?
 ```
-*(calc)* `situacao`: **lead** (nunca fechou) · **paciente ativo** (fechou e teve atendimento nos últimos N meses) · **paciente inativo** (último atendimento há ≥ N meses) — calculada na view `v_pessoas_situacao`.
+*(calc)* `ultimo_atendimento_em` = o mais recente entre `ultimo_atendimento_informado` e o último agendamento `compareceu` registrado no sistema.
+*(calc)* `situacao` (view `v_pessoas_situacao`):
+- **novo contato** — `tipo_cadastro = novo_contato` e nunca fechou;
+- **paciente ativo** — paciente antigo ou já fechou, e (`em_tratamento` ou último atendimento há < N meses);
+- **paciente inativo** — paciente antigo ou já fechou, e último atendimento há ≥ N meses (padrão 12).
+
+Um novo contato que fecha passa a ser paciente automaticamente; `tipo_cadastro` guarda como a pessoa **entrou** no sistema (útil para separar indicadores de aquisição dos de reativação).
+
+**`tratamentos_anteriores`** — o que o paciente antigo já fez na clínica, informado no recadastro. Serve para manutenção e reativação (ex.: "clareamento em 2024 → retoque devido").
+`id🔑, pessoa_id➜, procedimento_id➜, realizado_em (mês/ano aproximado)?, valor_aproximado_centavos?`
+> Apenas o **nome comercial** do procedimento e a data. Sem dentes, materiais, diagnóstico ou qualquer detalhe clínico.
 
 **`oportunidades`** — "um tratamento em negociação". Uma pessoa pode ter várias ao longo do tempo (fechou clareamento em 2025, negocia facetas em 2026).
 ```
@@ -293,7 +309,8 @@ apresentado_por➜ (profissional)
 > `descricao_comercial` é texto de venda ("Lentes de resina — arcada superior"), não plano clínico. Sem dentes, faces, materiais.
 
 **`vendas`** — nasce quando um orçamento é aprovado (1:1 com o orçamento aprovado).
-`id🔑, clinica_id➜, pessoa_id➜, oportunidade_id➜, orcamento_id➜, fechada_em, total_centavos, forma_pagamento_resumo`
+`id🔑, clinica_id➜, pessoa_id➜, oportunidade_id➜?, orcamento_id➜?, tipo (venda | saldo_anterior), fechada_em, total_centavos, forma_pagamento_resumo`
+> `saldo_anterior`: usado no recadastro de um paciente antigo que ainda tem parcelas a pagar de um tratamento feito antes do sistema. Não entra no indicador "Vendido" (só em "A receber"/"Recebido").
 
 **`parcelas`** — contas a receber.
 ```
@@ -356,6 +373,8 @@ erDiagram
     PESSOAS ||--o{ TAREFAS : alvo
     PESSOAS ||--o{ MENSAGENS : recebe
     PESSOAS }o--o| PESSOAS : "indicado por"
+    PESSOAS ||--o{ TRATAMENTOS_ANTERIORES : "já fez (recadastro)"
+    TRATAMENTOS_ANTERIORES }o--|| PROCEDIMENTOS : refere
     PESSOAS }o--|| ORIGENS : veio_de
 
     OPORTUNIDADES }o--|| PROCEDIMENTOS : interesse
@@ -405,7 +424,7 @@ Menu lateral com 8 itens principais (o restante fica dentro deles):
 |---|---|---|---|---|
 | 1 | **Hoje** | `/hoje` | Responder "O que eu tenho que fazer hoje?" | Saudação + frase-resumo; lista de **Cartões de Ação** agrupada; agenda do dia (compacta); 3 números do dia (a contatar, agendados, a receber hoje) |
 | 2 | **Agenda** | `/agenda` | Agenda comercial por dia/semana/profissional | Calendário; cores por status; ações rápidas (Confirmar · Compareceu · Faltou · Desmarcou · Remarcar) |
-| 3 | **Contatos** | `/contatos` | Leads e pacientes em uma lista só | Busca por nome/telefone; filtros rápidos (Leads · Pacientes ativos · Inativos · Sem próxima ação); botão **+ Novo lead** |
+| 3 | **Contatos** | `/contatos` | Leads e pacientes em uma lista só | Busca por nome/telefone; filtros rápidos (Leads · Pacientes ativos · Inativos · Sem próxima ação); botão **+ Cadastrar** (Novo contato · Paciente antigo) |
 | | | `/contatos/[id]` | Ficha da pessoa | Cabeçalho (nome, telefone, WhatsApp, situação, temperatura); **Próxima ação** em destaque; Oportunidades; Linha do tempo; Agendamentos; Orçamentos; Parcelas |
 | 4 | **Funil** | `/funil` | Visão do pipeline | Quadro kanban por etapa; cartão = nome, procedimento, valor, "há X dias", próxima ação; filtro por procedimento/origem/responsável; totais por coluna |
 | 5 | **Tarefas** | `/tarefas` | Todas as tarefas além de hoje | Abas: Atrasadas · Hoje · Próximos 7 dias · Concluídas; filtros por tipo |
@@ -423,7 +442,7 @@ Menu lateral com 8 itens principais (o restante fica dentro deles):
   > Orçamento de R$ 14.000 apresentado há 8 dias · 2º follow-up · veio do Instagram
   > `[Abrir WhatsApp com mensagem]` `[Registrar resultado]` `[Adiar ▾]`
 - **`RegistrarResultado`** — janela com botões grandes de resultado (seção 7.3) e, em seguida, a **próxima ação sugerida já preenchida** (data + tipo), que a usuária só confirma.
-- **`NovoLead`** — formulário de 4 campos obrigatórios (nome, WhatsApp, origem, procedimento de interesse); aberto de qualquer tela (atalho `N`).
+- **`Cadastrar`** — primeiro pergunta **"Quem é?"** com dois botões grandes: **Novo contato** · **Paciente antigo**; cada um abre um formulário curto próprio (fluxos F1a e F1b); aberto de qualquer tela (atalho `N`).
 - **`LinhaDoTempo`**, **`SeletorEtapa`**, **`BotaoWhatsApp`**, **`EditorMensagem`**, **`EtiquetaStatus`**, **`ValorMonetario`**.
 
 **Diretrizes visuais (premium, não call center):**
@@ -433,11 +452,29 @@ fundo off-white quente; texto grafite; **uma** cor de destaque sóbria (ex.: ver
 
 ## 6. Fluxos principais de usuário
 
-### F1 — Lead entrou (meta: < 30 s)
-1. `+ Novo lead` → nome, WhatsApp, origem, procedimento de interesse (opcional: observação, temperatura).
-2. Sistema normaliza telefone e **verifica duplicidade**. Se já existe: "Essa pessoa já está cadastrada (paciente desde 2024). Criar nova oportunidade para *Facetas*?".
-3. Cria `pessoa` + `oportunidade` na etapa **Novo lead** + tarefa **"Fazer primeiro contato"** (vence *agora*, prioridade máxima).
-4. Opcional imediato: "Já falou com ela? `[Registrar resultado agora]`".
+### F1 — Cadastro: "Quem é?"
+`+ Cadastrar` → **[ Novo contato ]** ou **[ Paciente antigo ]**. Em ambos, o sistema normaliza o telefone e **verifica duplicidade** antes de salvar ("Essa pessoa já está cadastrada. Abrir a ficha?").
+
+#### F1a — Novo contato (meta: < 30 s)
+1. Nome, WhatsApp, origem, procedimento de interesse (opcional: observação, temperatura).
+2. Cria `pessoa (novo_contato)` + `oportunidade` na etapa **Novo contato** + tarefa **"Fazer primeiro contato"** (vence *agora*, prioridade máxima).
+3. Opcional imediato: "Já falou com ela? `[Registrar resultado agora]`".
+
+#### F1b — Paciente antigo (meta: < 45 s; pensado para o recadastramento)
+1. **Nome** e **WhatsApp** (obrigatórios).
+2. **Último atendimento** — mês/ano, ou, se não lembrar, uma faixa: *menos de 6 meses · 6 a 12 meses · 1 a 2 anos · mais de 2 anos*.
+3. **O que já fez?** — botões com os procedimentos do catálogo (opcional; ano aproximado opcional).
+4. **Está em tratamento agora?** Sim / Não.
+5. **Tem pagamentos em aberto?** Sim → valor restante, nº de parcelas e próximo vencimento (gera `venda saldo_anterior` + parcelas). Não → segue.
+6. **Tem interesse em algum tratamento agora?** Sim → escolhe o procedimento → cria oportunidade (origem *Paciente antigo*) com a próxima ação. Não → segue.
+7. **Aceita receber mensagens da clínica?** (consentimento).
+8. `Salvar` ou **`Salvar e cadastrar o próximo`** (volta ao passo 1 com o formulário limpo).
+
+**O que o sistema faz com um paciente antigo:**
+- **Não** cria tarefa de "primeiro contato".
+- Calcula a situação (ativo/inativo) pela data do último atendimento.
+- Se algum tratamento anterior tem ciclo de retorno vencido (ex.: limpeza > 6 meses), o paciente entra no segmento **Manutenção devida**; se estiver inativo, em **Pacientes antigos** (seção 7.6).
+- Essas listas **não viram tarefas automaticamente** durante o recadastramento (ver 7.2).
 
 ### F2 — Trabalhar o dia (o fluxo mais usado)
 1. Abre **Hoje** → vê cartões ordenados por prioridade.
@@ -498,12 +535,22 @@ fundo off-white quente; texto grafite; **uma** cor de destaque sóbria (ex.: ver
 - Ao detectar duplicidade: nunca cria segunda pessoa; oferece criar nova oportunidade ou atualizar dados.
 - Origem é obrigatória no lead; a **primeira origem** da pessoa não muda (atribuição original); cada oportunidade tem a sua origem (atribuição da venda).
 - Indicação: `indicado_por_pessoa_id` permite futuramente agradecer/medir indicações.
+- **Tipo de cadastro obrigatório:** todo cadastro começa escolhendo *Novo contato* ou *Paciente antigo*. Se for escolhido errado, a administradora pode corrigir (fica registrado na auditoria).
+- **Paciente antigo** recebe origem *Paciente antigo* automaticamente, não entra no funil sem que haja um interesse informado e não conta nos indicadores de aquisição (leads recebidos, conversão de novos contatos).
+
+### 7.2.1 Recadastramento (não há planilha para importar)
+
+Todos os pacientes antigos serão cadastrados à mão. Para isso não virar um peso nem inundar a tela Hoje:
+- **Modo recadastramento:** tela de cadastro em sequência (F1b) com contador ("87 pacientes antigos cadastrados") e busca de duplicidade a cada nome.
+- **Reativação automática começa desligada.** Enquanto o recadastramento acontece, os pacientes antigos entram nos segmentos (visíveis em *Recuperação*), mas **nenhuma tarefa de reativação é criada**. A administradora liga a reativação quando quiser (Configurações → Reativação), e mesmo assim vale o limite diário (padrão 10/dia).
+- **Exceções que geram tarefa imediatamente:** interesse informado no cadastro (vira oportunidade) e parcelas em aberto (cobrança no vencimento).
+- Sugestão de rotina: cadastrar os pacientes conforme forem agendando/entrando em contato, e reservar alguns minutos por dia para os demais.
 
 ### 7.3 Catálogo de resultados de contato → próxima ação
 
 | Resultado (botão) | Efeito na oportunidade | Próxima ação sugerida |
 |---|---|---|
-| 💬 Respondeu, com interesse | etapa → Em contato (se estava em Novo lead) | "Conduzir para avaliação" — amanhã |
+| 💬 Respondeu, com interesse | etapa → Em contato (se estava em Novo contato) | "Conduzir para avaliação" — amanhã |
 | 📅 Agendou avaliação | etapa → Avaliação agendada | "Confirmar avaliação" — véspera |
 | 🤔 Vai pensar | etapa → Em negociação | Follow-up em 3 dias |
 | 🗓️ Pediu retorno em data | mantém etapa | Tarefa na data informada |
@@ -554,7 +601,7 @@ Cadências **nunca** se estendem sozinhas além do último passo: terminam em um
 | Desmarcaram e não remarcaram | agendamento `desmarcado`/`faltou` nos últimos 90 d sem `remarcado_para` |
 | Sem resposta | oportunidade `pausada` com `reabre_em` ≤ hoje |
 | Manutenção devida | venda de procedimento com `ciclo_retorno_meses` e último atendimento há ≥ ciclo |
-| Pacientes antigos | situação *paciente inativo* (último atendimento ≥ N meses, padrão 12) sem oportunidade aberta |
+| Pacientes antigos | situação *paciente inativo* (último atendimento — informado no recadastro ou registrado na agenda — há ≥ N meses, padrão 12) sem oportunidade aberta |
 | Aniversariantes do mês | data de nascimento informada e consentimento de marketing |
 
 **Elegibilidade (vale para todo contato ativo não solicitado):**
@@ -588,6 +635,18 @@ Cadências **nunca** se estendem sozinhas além do último passo: terminam em um
 - Auditoria de exportações e visualização de financeiro.
 
 ### 7.10 Permissões
+
+**V1 — dois usuários:**
+
+| Recurso | Administradora (dona) | Secretária |
+|---|:-:|:-:|
+| Cadastro, contatos, funil, tarefas, agenda, orçamentos | ✅ | ✅ |
+| Registrar pagamentos | ✅ | ✅ |
+| Resumo financeiro e indicadores financeiros | ✅ | ⚙️ a definir (flag `pode_ver_financeiro`) |
+| Excluir/anonimizar paciente, exportar dados, campanhas | ✅ | ❌ (executa as tarefas das campanhas) |
+| Configurações, usuários, auditoria, ligar reativação | ✅ | ❌ |
+
+**Papéis previstos para o futuro** (já suportados pelo modelo, não criados na V1):
 
 | Recurso | Admin | Gestor | Comercial | Dentista |
 |---|:-:|:-:|:-:|:-:|
@@ -708,7 +767,7 @@ prioridade = base_do_tipo
 
 | Ordem | Etapa | Tipo | SLA (dias) | Entra quando… | Próxima ação típica |
 |---|---|---|---|---|---|
-| 1 | **Novo lead** | aberta | 0 | lead cadastrado | Primeiro contato |
+| 1 | **Novo contato** | aberta | 0 | novo contato cadastrado (ou paciente antigo com interesse) | Primeiro contato |
 | 2 | **Em contato** | aberta | 3 | houve resposta | Conduzir para avaliação |
 | 3 | **Avaliação agendada** | aberta | — | avaliação marcada | Confirmar na véspera |
 | 4 | **Avaliação realizada** | aberta | 2 | compareceu | Apresentar orçamento |
@@ -780,7 +839,7 @@ Formulário único: **Entrada** (valor, data, forma) + **N parcelas** (forma, 1�
 
 ## 11. Estrutura para evolução
 
-> O item 11 do briefing chegou cortado ("Defina uma estrutura que perm…"). Interpretei como **"que permita crescer e evoluir sem reescrever"** — novas unidades, integrações e, eventualmente, oferecer o sistema como SaaS. Se a intenção era outra, ajusto esta seção.
+> ✅ **Interpretação confirmada:** estrutura que permita crescer e evoluir sem reescrever — novas unidades, integrações e, eventualmente, oferecer o sistema como SaaS.
 
 | Direção de crescimento | O que já fica pronto na V1 | O que será feito quando necessário |
 |---|---|---|
@@ -838,7 +897,7 @@ A tela **Hoje** usa só 3 números; a página **Indicadores** concentra o resto 
 
 | Tema | PROPOSTA_V1 | Agora |
 |---|---|---|
-| Cadastro | `pacientes` | `pessoas` (lead e paciente são a mesma entidade; situação calculada) |
+| Cadastro | `pacientes` | `pessoas` (lead e paciente são a mesma entidade; situação calculada); cadastro começa por **Novo contato × Paciente antigo**, com modo recadastramento |
 | Resultado da oportunidade | etapas terminais genéricas | quatro resultados explícitos: **Fechou · Não fechou · Desistiu · Sem resposta**, cada um com próxima ação |
 | Próxima ação | campo na oportunidade | **invariante** garantida por serviço + sentinela; tarefas com `acao_recomendada` e prioridade |
 | Remarketing | não havia | módulo **Recuperação**: segmentos, campanhas, limites de frequência e consentimento de marketing |
@@ -859,7 +918,7 @@ Cada etapa termina com algo testável em ambiente de homologação com dados fic
 | Etapa | Entrega |
 |---|---|
 | 0. Fundação | Projeto, Supabase SP, login, membros/papéis, RLS, auditoria, layout e identidade visual, seed fictício |
-| 1. Contatos | Pessoas, novo lead (30 s), deduplicação, ficha, linha do tempo, botão WhatsApp |
+| 1. Cadastro | "Quem é?" (novo contato × paciente antigo), **modo recadastramento**, tratamentos anteriores, saldo anterior, deduplicação, ficha, linha do tempo, botão WhatsApp — **entregue primeiro para o recadastramento começar cedo** |
 | 2. Motor de tarefas + Hoje | Tabela de tarefas, regras síncronas, *Registrar resultado*, prioridade, tela Hoje |
 | 3. Funil | Oportunidades, etapas, kanban, histórico, quatro resultados, motivos |
 | 4. Agenda | Agendamentos, confirmações, faltou/desmarcou/recuperação |
@@ -874,15 +933,15 @@ Cada etapa termina com algo testável em ambiente de homologação com dados fic
 
 ## 15. Decisões pendentes
 
-1. **Item 11 do briefing** — confirmar a interpretação da seção 11.
-2. **Quantos usuários** e quem pode ver o financeiro?
-3. **Profissionais** que atendem avaliações; horário de funcionamento; a clínica abre aos sábados?
+**Já respondido:** item 11 confirmado · dois usuários (dona e secretária) · não há planilha, recadastro manual · cadastro separa *Novo contato* de *Paciente antigo* (termo "Novo contato" adotado na interface).
+
+1. **A secretária pode ver o resumo financeiro** (vendido, recebido, em atraso) ou só registrar pagamentos?
+2. **Quem atende na agenda?** Só a dona da clínica, ou há outros dentistas? Horário de funcionamento; abre aos sábados?
+3. **Qual e-mail** cada uma usará para entrar no sistema? (Só no momento de criar os acessos.)
 4. **SLA do primeiro contato** — 15 min em horário comercial está adequado?
 5. **Prazo de "paciente inativo"** — 12 meses? E de reativação para quem *desistiu* — 180 dias?
 6. **Limites de contato** — 1 contato ativo a cada 3 dias e 1 campanha a cada 30 dias por pessoa?
-7. **Nomenclatura na interface** — usar "Lead" ou "Novo contato"? (Em clínicas premium, "contato"/"paciente" costuma soar melhor para a equipe.)
-8. **Despesas** — ligar o controle simples de despesas na V1 ou manter só contas a receber?
-9. **Importação** — existe planilha de pacientes antigos? (É o combustível da reativação.)
-10. **Identidade visual** — manual de marca / logotipo / cores do Instituto CG.
+7. **Despesas** — ligar o controle simples de despesas na V1 ou manter só contas a receber?
+8. **Identidade visual** — manual de marca / logotipo / cores do Instituto CG.
 
 Com essas respostas, o próximo passo é a **Etapa 0 — Fundação**.
