@@ -2,6 +2,8 @@
 
 > Documento para revisão e aprovação. **Nenhum código, banco de dados ou serviço foi criado ainda.**
 > Data: 29/09/2026
+>
+> ⚠️ **Atualizado por [`ARQUITETURA_CRM.md`](./ARQUITETURA_CRM.md)**, que incorpora o briefing com foco em leads, remarketing, recuperação e indicadores. Onde houver diferença, vale o documento novo.
 
 ---
 
