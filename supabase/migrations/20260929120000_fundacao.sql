@@ -204,6 +204,10 @@ create table public.etapas_funil (
   ordem          int not null,
   tipo           public.tipo_etapa not null default 'aberta',
   resultado      public.resultado_oportunidade,
+  -- Papel da etapa nas automações (o nome pode ser mudado à vontade).
+  marco          text check (marco in (
+                   'novo_contato', 'em_contato', 'avaliacao_agendada',
+                   'avaliacao_realizada', 'orcamento_apresentado', 'em_negociacao')),
   sla_dias       int check (sla_dias >= 0),
   cor            text not null default '#B08D57' check (cor ~ '^#[0-9A-Fa-f]{6}$'),
   ativo          boolean not null default true,
@@ -211,6 +215,8 @@ create table public.etapas_funil (
   atualizado_em  timestamptz not null default now(),
   unique (clinica_id, id),
   unique (clinica_id, nome),
+  unique (clinica_id, marco),
+  check (marco is null or tipo = 'aberta'),
   -- Etapa aberta não tem resultado; ganho = fechou; perda = um dos resultados negativos.
   check (
     (tipo = 'aberta' and resultado is null)

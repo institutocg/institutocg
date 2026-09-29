@@ -1,20 +1,48 @@
 @import "tailwindcss";
 
-/* Identidade provisória: branco e dourado (ajustar quando o logotipo ficar pronto). */
-:root {
-  --fundo: #fbf9f5;
-  --texto: #2a2723;
-  --dourado: #b08d57;
+/*
+ * Identidade provisória do Instituto CG: branco e dourado.
+ * Todos os tons ficam aqui para serem ajustados quando o logotipo ficar pronto.
+ */
+@theme {
+  --color-fundo: #faf8f4;
+  --color-superficie: #ffffff;
+  --color-grafite: #2b2824;
+  --color-suave: #6f6a62;
+  --color-sutil: #9a948a;
+  --color-borda: #ebe5da;
+  --color-borda-forte: #d9d0c1;
+  --color-dourado: #b08d57;
+  --color-dourado-escuro: #8a6a3a;
+  --color-dourado-claro: #f5eee2;
+  --color-urgente: #b4533a;
+  --color-urgente-claro: #fbefeb;
+  --color-importante: #b7802a;
+  --color-importante-claro: #fbf3e4;
+  --color-rotina: #5f8a6a;
+  --color-rotina-claro: #eef4ef;
+
+  --font-titulo: var(--fonte-titulo), "Cormorant Garamond", Georgia, serif;
+  --font-sans: var(--fonte-texto), "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-fundo: var(--fundo);
-  --color-texto: var(--texto);
-  --color-dourado: var(--dourado);
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--fundo);
-  color: var(--texto);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: var(--color-fundo);
+  color: var(--color-grafite);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+dialog::backdrop {
+  background: rgb(43 40 36 / 0.35);
+  backdrop-filter: blur(2px);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-dourado);
+  outline-offset: 2px;
 }

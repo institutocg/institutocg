@@ -232,7 +232,16 @@ begin
     'intervalo_min_campanha_dias', 30,
     'reativacao_automatica', false,
     'limite_reativacao_dia', 10,
-    'validade_orcamento_dias', 30
+    'validade_orcamento_dias', 30,
+    -- Intervalos (em dias) entre as tentativas de cada cadência de contato.
+    'cadencias', jsonb_build_object(
+      'primeiro_contato',      jsonb_build_array(0, 1, 2, 4),
+      'follow_up_orcamento',   jsonb_build_array(2, 5, 8, 15),
+      'recuperar_desmarcacao', jsonb_build_array(0, 2, 5),
+      'recuperar_falta',       jsonb_build_array(0, 1, 4),
+      'follow_up',             jsonb_build_array(2, 3, 5)
+    ),
+    'dias_reabrir_sem_resposta', 60
   ))
   returning id into c;
 
@@ -261,17 +270,17 @@ begin
     (c, 'Paciente antigo',             'interno',   10),
     (c, 'Outro',                       'organico',  99);
 
-  insert into public.etapas_funil (clinica_id, nome, ordem, tipo, resultado, sla_dias, cor) values
-    (c, 'Novo contato',          1,  'aberta', null,           0,    '#C9A96E'),
-    (c, 'Em contato',            2,  'aberta', null,           3,    '#B99A62'),
-    (c, 'Avaliação agendada',    3,  'aberta', null,           null, '#A88B57'),
-    (c, 'Avaliação realizada',   4,  'aberta', null,           2,    '#977C4C'),
-    (c, 'Orçamento apresentado', 5,  'aberta', null,           7,    '#866D41'),
-    (c, 'Em negociação',         6,  'aberta', null,           15,   '#755E36'),
-    (c, 'Fechou',                7,  'ganho',  'fechou',       null, '#5E7D5A'),
-    (c, 'Não fechou',            8,  'perda',  'nao_fechou',   null, '#9A8F84'),
-    (c, 'Desistiu',              9,  'perda',  'desistiu',     null, '#8A8178'),
-    (c, 'Sem resposta',          10, 'perda',  'sem_resposta', null, '#B3AAA0');
+  insert into public.etapas_funil (clinica_id, nome, ordem, tipo, resultado, marco, sla_dias, cor) values
+    (c, 'Novo contato',          1,  'aberta', null,           'novo_contato',          0,    '#C9A96E'),
+    (c, 'Em contato',            2,  'aberta', null,           'em_contato',            3,    '#B99A62'),
+    (c, 'Avaliação agendada',    3,  'aberta', null,           'avaliacao_agendada',    null, '#A88B57'),
+    (c, 'Avaliação realizada',   4,  'aberta', null,           'avaliacao_realizada',   2,    '#977C4C'),
+    (c, 'Orçamento apresentado', 5,  'aberta', null,           'orcamento_apresentado', 7,    '#866D41'),
+    (c, 'Em negociação',         6,  'aberta', null,           'em_negociacao',         15,   '#755E36'),
+    (c, 'Fechou',                7,  'ganho',  'fechou',       null,                    null, '#5E7D5A'),
+    (c, 'Não fechou',            8,  'perda',  'nao_fechou',   null,                    null, '#9A8F84'),
+    (c, 'Desistiu',              9,  'perda',  'desistiu',     null,                    null, '#8A8178'),
+    (c, 'Sem resposta',          10, 'perda',  'sem_resposta', null,                    null, '#B3AAA0');
 
   insert into public.motivos (clinica_id, nome, aplica_a, retorno_sugerido_dias, ordem) values
     (c, 'Valor alto',                        'nao_fechou', 30,   1),
@@ -315,7 +324,19 @@ begin
     (c, 'reativacao', 'Reativação de paciente',
      'Olá, {primeiro_nome}! Há algum tempo não nos vemos no Instituto CG. Que tal agendarmos uma visita para cuidarmos do seu sorriso?'),
     (c, 'confirmar_pagamento', 'Lembrete de pagamento',
-     'Olá, {primeiro_nome}! Tudo bem? Passando para lembrar, com carinho, do pagamento de {valor} previsto para {data}. Qualquer dúvida, estou à disposição.');
+     'Olá, {primeiro_nome}! Tudo bem? Passando para lembrar, com carinho, do pagamento de {valor} previsto para {data}. Qualquer dúvida, estou à disposição.'),
+    (c, 'recuperar_falta', 'Paciente faltou',
+     'Olá, {primeiro_nome}! Sentimos sua falta hoje. Está tudo bem? Se quiser, reservo um novo horário para você.'),
+    (c, 'follow_up', 'Acompanhamento',
+     'Olá, {primeiro_nome}! Tudo bem? Passando para saber se posso ajudar com alguma informação sobre {procedimento}.'),
+    (c, 'retorno_por_motivo', 'Retomar conversa',
+     'Olá, {primeiro_nome}! Tudo bem? Lembrei de você e quis saber como está. Se ainda tiver interesse em {procedimento}, podemos conversar sobre as possibilidades.'),
+    (c, 'reabrir_sem_resposta', 'Retomar contato',
+     'Olá, {primeiro_nome}! Tudo bem? Faz um tempo que conversamos sobre {procedimento}. Se fizer sentido para você, estou à disposição.'),
+    (c, 'manutencao', 'Manutenção',
+     'Olá, {primeiro_nome}! Está chegando a hora da sua manutenção de {procedimento}. Vamos agendar um horário?'),
+    (c, 'agendar_tratamento', 'Início do tratamento',
+     'Olá, {primeiro_nome}! Que alegria ter você conosco. Vamos combinar a data de início do seu tratamento?');
 
   return c;
 end;

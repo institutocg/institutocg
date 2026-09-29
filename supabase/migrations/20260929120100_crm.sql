@@ -294,6 +294,7 @@ create table public.tarefas (
   mensagem_sugerida   text check (length(mensagem_sugerida) <= 2000),
   modelo_mensagem_id  uuid,
   resultado           text,
+  passo               int not null default 1 check (passo >= 1),   -- tentativa da cadência
   adiamentos          int not null default 0 check (adiamentos >= 0),
   chave_dedupe        text,
   concluida_em        timestamptz,
@@ -399,7 +400,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  if new.status in ('ganha', 'perdida') and old.status not in ('ganha', 'perdida') then
+  if new.status in ('ganha', 'perdida', 'pausada') and new.status is distinct from old.status then
     update public.tarefas
        set status = 'cancelada', cancelada_em = now(),
            cancelada_motivo = 'Negociação encerrada (' || new.resultado || ')'

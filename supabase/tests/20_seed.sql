@@ -1,7 +1,7 @@
--- Confere se os dados fictícios alimentam o painel "O que eu tenho que fazer hoje?".
+-- Mostra as tarefas geradas pelos dados fictícios (conferência visual).
 \set ON_ERROR_STOP 1
-\echo '— Painel com os dados fictícios (seed)'
-select format('  %s | %s', situacao_prazo, texto_painel)
-  from public.v_painel_tarefas p
-  join public.clinicas c on c.id = p.clinica_id and c.nome = 'Instituto CG'
- order by ordem_prioridade, vence_em \g (tuples_only=on format=unaligned)
+\echo '— Tarefas abertas geradas pelos dados fictícios (seed)'
+select format('  %s | %s | %s | %s', to_char(vence_em, 'DD/MM'), tipo, prioridade, titulo)
+  from public.v_tarefas_abertas t
+  join public.clinicas c on c.id = t.clinica_id and c.nome = 'Instituto CG'
+ order by vence_em, prioridade \g (tuples_only=on format=unaligned)

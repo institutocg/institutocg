@@ -10,6 +10,30 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260929120100_crm.sql` | Pessoas (leads/pacientes), oportunidades (funil) + histórico de etapas, interesses, tratamentos anteriores, agenda, follow-ups e tarefas |
 | `20260929120200_financeiro.sql` | Orçamentos + itens, vendas, parcelas, pagamentos e lembretes financeiros automáticos |
 | `20260929120300_visoes_e_inicializacao.sql` | Visões de leitura (`v_contatos`, `v_painel_tarefas`, `v_parcelas`, `v_pendencias_financeiras`, `v_resumo_financeiro_mensal`, `v_funil`) e `inicializar_clinica()` |
+| `20260929120400_motor_de_acoes.sql` | **Motor de ações**: calendário (dias úteis e feriados), cadências, gatilhos que criam tarefas, `registrar_acao()`, `marcar_parcela_paga()`, rotina diária `preparar_dia()` e a visão `v_tarefas_abertas` usada pelo painel |
+
+## Motor de ações — quando o sistema cria tarefas sozinho
+
+| Situação | Ação criada |
+|---|---|
+| Novo contato cadastrado | Primeiro contato, hoje, urgente (cadência 0 → 1 → 2 → 4 dias) |
+| Paciente antigo com interesse | "Conversar com X sobre Y", hoje |
+| Agendamento criado | Confirmação na véspera útil; funil vai para "Avaliação agendada" |
+| Confirmação sem resposta | Nova tentativa no dia da consulta |
+| Consulta passou sem registro | "X compareceu?" (rotina diária) |
+| Desmarcou / faltou | Recuperação urgente, hoje (cadência 0 → 2 → 5 / 0 → 1 → 4 dias) |
+| Compareceu à avaliação | "Registrar o orçamento"; funil "Avaliação realizada" |
+| Orçamento apresentado | Follow-up em 2 dias (cadência 2 → 5 → 8 → 15 dias) |
+| Vai pensar / pediu retorno / respondeu | Próximo contato em 3 dias / na data combinada / amanhã |
+| Não fechou | Retomar no prazo do motivo (ex.: valor alto = 30 dias) |
+| Desistiu | Reativação no prazo do motivo |
+| Sem resposta (cadência esgotada) | Decisão humana; se pausada, nova tentativa em 60 dias |
+| Fechou | "Agendar o início do tratamento" |
+| Parcela em aberto | Lembrete na data prevista; em atraso aparece como urgente |
+| Paciente antigo inativo / manutenção devida | Reativação (somente com a reativação ligada; limite diário) |
+| Não quer mais contato | Nenhuma tarefa, nunca (exceto lembretes financeiros) |
+
+Nenhuma cadência se estende para sempre: a última tentativa vira "Decidir o próximo passo". Datas caem sempre em dia útil (seg–sex, sem feriados).
 
 ## Onde está cada requisito
 
@@ -43,7 +67,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 npm run test:db    # sobe um PostgreSQL temporário, aplica as migrações, o seed e os testes
 ```
 
-Os testes (`tests/10_integridade.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
+Os testes (`tests/10_integridade.sql` e `tests/15_motor_de_acoes.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
 
 ## Implantação no Supabase (quando formos para produção)
 
@@ -56,3 +80,4 @@ Os testes (`tests/10_integridade.sql`) cobrem relacionamentos, regras de acesso,
    select adicionar_membro('<id da clínica>', 'email-da-secretaria@...', 'comercial', true);
    ```
 5. **Não** executar `seed.sql` em produção (são dados fictícios).
+6. (Opcional) Agendar a rotina diária com pg_cron: `select cron.schedule('rotina-diaria', '0 8 * * *', $$select public.preparar_dia(id) from public.clinicas$$);` — mesmo sem isso, ela roda ao abrir o painel.

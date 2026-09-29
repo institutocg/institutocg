@@ -231,8 +231,8 @@ select testes.ok((
      and c.responsavel = 'Júlia' and c.origem = 'Instagram'
   from public.v_contatos c where c.id = testes.v('maria')),
   'contato mostra status, etapa atual, procedimento de interesse, próxima ação e data');
-select testes.ok((select count(*) from public.v_painel_tarefas where pessoa_id = testes.v('maria')) = 1,
-  'tarefa do dia aparece no painel');
+select testes.ok((select count(*) from public.v_painel_tarefas where pessoa_id = testes.v('maria')) = 2,
+  'tarefa do dia aparece no painel (a manual + o primeiro contato criado automaticamente)');
 
 select testes.erro(
   $$insert into public.tarefas (clinica_id, pessoa_id, titulo, vence_em, origem) values (testes.v('c1'), testes.v('maria'), 'Sem regra', current_date, 'automatica')$$,

@@ -937,9 +937,18 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 
 - **Uma negociação em andamento por pessoa** (índice único), garantindo uma única etapa atual; o histórico de etapas guarda etapa anterior, nova, data, usuário e observação.
 - **Status e resultado da oportunidade derivam da etapa** (gatilho): mover a etapa é a única forma de mudar o estado.
-- **Regras que nunca podem falhar ficam no banco** (gatilhos), valendo para qualquer caminho de escrita: lembrete financeiro por parcela, histórico de etapas, follow-ups automáticos da agenda, último contato, auditoria. As regras de cadência (quando fazer o próximo follow-up) continuam na camada TypeScript.
+- **As regras de negócio que criam tarefas ficam no banco** (gatilhos e funções `registrar_acao`/`preparar_dia`), valendo para qualquer caminho de escrita e sempre dentro de uma única transação: lembretes financeiros, histórico de etapas, cadências de follow-up, recuperação de desmarcações, reativação. A camada TypeScript cuida da apresentação (classificação do painel e textos dos cartões). Isso substitui o "motor em TypeScript + Vercel Cron" das seções 2 e 8.
+- **Rotina diária sem infraestrutura extra:** `preparar_dia()` roda na primeira abertura do painel de cada dia (e pode ser agendada no pg_cron).
 - **Formas de pagamento configuráveis** (`formas_pagamento`) + condição **à vista / parcelado**.
 - **Follow-ups imutáveis:** só podem ser anulados com motivo; pagamentos só estornados; contatos arquivados; nada é apagado.
+
+## 14.2 Painel "O que eu tenho que fazer hoje?" (implementado)
+
+- **Ordem:** frase-resumo → **Atrasadas** (bloco destacado, "comece por aqui") → 🔴 **Urgente** → 🟠 **Importante** → 🟢 **Rotina** → **Próximos dias** (7 dias, agrupados por dia).
+- **Decisão:** as tarefas atrasadas (inclusive pagamentos atrasados) aparecem **uma única vez**, no bloco "Atrasadas" no topo, com a etiqueta da prioridade; assim nenhuma tarefa aparece duplicada.
+- **Classificação:** urgente = novo contato, desmarcou/faltou, retorno combinado para hoje, pagamento atrasado; importante = follow-ups, orçamentos enviados, interessados, pagamento do dia, decisões; rotina = confirmações, reativações, manutenções e demais.
+- **Cartão:** nome, procedimento de interesse, motivo do contato, ação recomendada, data e botões (Abrir paciente · Ver mensagem · Registrar contato · Concluir). Pagamentos: Ver negociação · Marcar como pago. Desmarcações e decisões não têm "Concluir" — exigem o resultado da conversa.
+- **"Concluir"** = "fiz a ação": o sistema agenda sozinho a próxima tentativa da cadência.
 
 ## 15. Decisões pendentes
 
