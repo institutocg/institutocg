@@ -12,7 +12,6 @@ export default defineConfig({
   workers: 1,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  globalSetup: "./tests/e2e/preparar.ts",
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${PORTA}`,

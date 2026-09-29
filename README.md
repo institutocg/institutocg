@@ -20,7 +20,7 @@ Entre com `secretaria@institutocg.local` ou `dona@institutocg.local` (só o e-ma
 ## Testes
 
 ```bash
-npm test           # regras do painel em TypeScript
+npm test           # regras em TypeScript (painel, cadastro, resumo)
 npm run test:db    # integridade do banco e motor de ações (PostgreSQL temporário)
 npm run test:e2e   # telas, no navegador, contra o banco local recriado
 npm run lint && npm run typecheck

@@ -50,7 +50,7 @@ async function executar(
       const { rows } = await db.query<{ hoje: string }>("select public.hoje_clinica($1) as hoje", [sessao.clinicaId]);
       return { proxima, hoje: rows[0].hoje };
     });
-    revalidatePath("/hoje");
+    revalidatePath("/", "layout");
     const complemento = proxima
       ? ` Próxima ação: ${proxima.titulo} — ${rotuloData(proxima.vence_em, hoje).toLowerCase()}.`
       : "";

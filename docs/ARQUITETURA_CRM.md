@@ -950,6 +950,19 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 - **Cartão:** nome, procedimento de interesse, motivo do contato, ação recomendada, data e botões (Abrir paciente · Ver mensagem · Registrar contato · Concluir). Pagamentos: Ver negociação · Marcar como pago. Desmarcações e decisões não têm "Concluir" — exigem o resultado da conversa.
 - **"Concluir"** = "fiz a ação": o sistema agenda sozinho a próxima tentativa da cadência.
 
+## 14.3 Cadastro e gestão de leads (implementado)
+
+- **"+ Novo paciente"** sempre visível no menu (e no topo, no celular) → pergunta **"Quem é?"**: *Novo contato* ou *Paciente antigo*.
+- **Novo contato:** nome, nascimento, WhatsApp, e-mail, endereço, cidade, como conheceu, procedimento de interesse, responsável, observações (sem dados clínicos) e aceite de campanhas. Ao salvar: pessoa criada, primeiro contato = hoje, responsável registrado, negociação na etapa **Novo contato** e tarefa **"Fazer o primeiro contato"** (urgente, hoje) — já aparece no **Funil** e no **Hoje**.
+- **Paciente antigo:** mesmos dados pessoais + **último atendimento** (mês/ano ou faixa: menos de 6 meses, 6 a 12 meses, 1 a 2 anos, mais de 2 anos, não lembra) + **tratamentos já feitos** (só o nome) + "em tratamento agora" + interesse atual opcional. Botão **"Salvar e cadastrar o próximo"** para o recadastramento em sequência, com contador.
+  - A faixa vira uma data aproximada (ex.: "1 a 2 anos" = 18 meses atrás) para os cálculos de reativação, mas a tela mostra a faixa.
+  - Com interesse: negociação em **Em contato** e tarefa "Conversar com X sobre Y".
+  - **Resgate sob demanda:** na ficha, para pacientes inativos ou com manutenção vencida, o botão "Criar tarefa de manutenção/reativação" gera a tarefa na hora — mesmo com a reativação automática desligada.
+- **Duplicidade:** WhatsApp/e-mail já cadastrado → aviso com link para o cadastro existente; nada é duplicado.
+- **Ficha do paciente:** resumo da situação comercial em 3 frases; Próxima ação (com os mesmos botões do painel); Funil (etapas com a atual em destaque); Interesse (e negociações anteriores); Na clínica (último atendimento, tratamentos, resgate); Dados; Histórico (linha do tempo com contatos, mudanças de etapa, pagamentos e cadastro); Financeiro (fechado, recebido, a receber, em atraso; negociações, parcelas e orçamentos); Tarefas (próximas e concluídas/canceladas). Edição dos dados em página própria (tratamentos só podem ser acrescentados).
+- **Contatos:** lista com busca por nome (sem acento), telefone ou e-mail e filtros (novos contatos, em negociação, pacientes antigos, inativos, sem próxima ação).
+- **Funil:** quadro por etapa com dias na etapa (destaque quando passa do prazo da etapa), valor estimado e próxima ação. (Arrastar cartões entre etapas fica para uma próxima etapa.)
+
 ## 15. Decisões pendentes
 
 **Decidido:**

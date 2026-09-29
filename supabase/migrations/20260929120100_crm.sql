@@ -77,7 +77,10 @@ create table public.pessoas (
 
   -- Paciente antigo (informado no recadastro)
   paciente_desde                date,
-  ultimo_atendimento_informado  date,
+  ultimo_atendimento_informado  date,          -- mês informado, ou data aproximada da faixa
+  -- Quando a pessoa não lembra o mês: faixa aproximada (exibida como texto).
+  ultimo_atendimento_faixa      text check (ultimo_atendimento_faixa in (
+                                  'menos_6_meses', '6_a_12_meses', '1_a_2_anos', 'mais_2_anos', 'nao_lembra')),
   em_tratamento                 boolean not null default false,
 
   -- Datas de relacionamento

@@ -18,7 +18,10 @@ const global = globalThis as unknown as { crmPool?: Pool };
 function criarPool() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL não configurada (veja .env.example).");
-  return new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 10_000 });
+  const novo = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 10_000 });
+  // Conexão ociosa derrubada (reinício do banco, rede): registra e segue; o pool abre outra.
+  novo.on("error", (erro) => console.error("Conexão com o banco encerrada", erro.message));
+  return novo;
 }
 
 export function pool(): Pool {

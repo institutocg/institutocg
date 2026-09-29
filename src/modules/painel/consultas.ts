@@ -1,4 +1,5 @@
 import "server-only";
+import type { PoolClient } from "pg";
 import { comoUsuaria } from "@/lib/db";
 import type { Sessao } from "@/modules/sessao/sessao";
 import { DIAS_PROXIMOS, montarPainel, type Painel, type TarefaAberta } from "./painel";
@@ -43,12 +44,17 @@ export async function carregarPainel(sessao: Sessao): Promise<{ painel: Painel; 
       ...r,
       agendamento_inicio: r.agendamento_inicio instanceof Date ? r.agendamento_inicio.toISOString() : r.agendamento_inicio,
     }));
-    const { rows: motivos } = await db.query<Motivo>(
-      `select id, nome, aplica_a, retorno_sugerido_dias from public.motivos
-        where clinica_id = $1 and ativo and aplica_a in ('nao_fechou', 'desistiu')
-        order by aplica_a, ordem`,
-      [sessao.clinicaId],
-    );
+    const motivos = await carregarMotivos(db, sessao.clinicaId);
     return { painel: montarPainel(tarefas, hoje), motivos };
   });
+}
+
+export async function carregarMotivos(db: PoolClient, clinicaId: string): Promise<Motivo[]> {
+  const { rows } = await db.query<Motivo>(
+    `select id, nome, aplica_a, retorno_sugerido_dias from public.motivos
+      where clinica_id = $1 and ativo and aplica_a in ('nao_fechou', 'desistiu')
+      order by aplica_a, ordem`,
+    [clinicaId],
+  );
+  return rows;
 }

@@ -1,6 +1,5 @@
 import { CircleCheck, Coffee } from "lucide-react";
 import type { ReactNode } from "react";
-import { Avisos } from "@/components/avisos";
 import { CartaoAcao } from "@/components/painel/cartao-acao";
 import { formatarDataLonga, saudacao } from "@/lib/datas";
 import { carregarPainel, type Motivo } from "@/modules/painel/consultas";
@@ -119,7 +118,6 @@ export default async function PaginaHoje() {
         )}
       </section>
 
-      <Avisos />
     </div>
   );
 }

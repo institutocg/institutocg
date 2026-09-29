@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { recriarBanco } from "./banco";
 
 async function entrar(page: Page, email: string) {
   await page.goto("/login");
@@ -15,6 +16,7 @@ function daquiA(dias: number) {
 }
 
 test.describe.configure({ mode: "serial" });
+test.beforeAll(recriarBanco);
 
 test("sem login, o painel leva para a tela de entrada", async ({ page }) => {
   await page.goto("/hoje");
@@ -172,10 +174,11 @@ test("erro: concluir uma tarefa que já foi concluída em outra tela", async ({ 
 test("abrir paciente mostra a ficha com o histórico", async ({ page }) => {
   await entrar(page, "secretaria@institutocg.local");
   await cartao(page, "Marcos Tavares").getByRole("link", { name: "Abrir paciente" }).click();
-  await expect(page.getByRole("heading", { name: "Marcos Tavares" })).toBeVisible();
-  await expect(page.getByText("Periodontia")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Histórico de contatos" })).toBeVisible();
-  await page.getByRole("link", { name: "Voltar para Hoje" }).click();
+  await expect(page.getByRole("heading", { name: "Marcos Tavares", level: 1 })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Interesse" }).getByText("Periodontia")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Funil" }).locator('[aria-current="step"]')).toHaveText("Orçamento apresentado");
+  await expect(page.getByRole("region", { name: "Histórico" }).getByText("Etapa: Avaliação realizada → Orçamento apresentado")).toBeVisible();
+  await page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: "Hoje" }).click();
   await expect(page).toHaveURL(/\/hoje$/);
 });
 

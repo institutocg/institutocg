@@ -313,3 +313,25 @@ select testes.ok(not exists (
   'varredura final: toda negociação aberta tem próxima ação');
 
 \echo '✓ Motor de ações verificado.'
+
+\echo '— Resgate de paciente antigo sob demanda'
+reset role; select testes.entrar('sec@motor.local'); set role authenticated;
+select testes.guardar('jonas', testes.nova_pessoa('Jonas Limpeza', '+5511910000020', 'paciente_antigo'));
+insert into public.tratamentos_anteriores (clinica_id, pessoa_id, procedimento_id, realizado_em)
+values (testes.v('m'), testes.v('jonas'),
+        (select id from public.procedimentos where clinica_id = testes.v('m') and nome = 'Manutenção e limpeza'), '2025-01-10');
+select public.criar_resgate(testes.v('jonas'));
+select testes.ok((select t.tipo = 'manutencao' and t.descricao = 'manutenção e limpeza em 01/2025'
+                  and t.mensagem_sugerida like 'Olá, Jonas!%manutenção%' from testes.pendente(testes.v('jonas')) t),
+  'resgate com tratamento de ciclo (limpeza): tarefa de manutenção com mensagem');
+select testes.erro($$select public.criar_resgate(testes.v('jonas'))$$, 'já existe uma tarefa de resgate',
+  'não cria dois resgates para a mesma pessoa');
+select testes.guardar('kaka', testes.nova_pessoa('Kaká Sumida', '+5511910000021', 'paciente_antigo'));
+select public.criar_resgate(testes.v('kaka'));
+select testes.ok((select tipo = 'reativacao' from testes.pendente(testes.v('kaka'))),
+  'resgate sem tratamento com ciclo: reativação');
+select testes.erro($$select public.criar_resgate(testes.v('eva'))$$, 'negociação em andamento',
+  'quem já está negociando não recebe resgate');
+reset role;
+\echo '✓ Resgate verificado.'
+select testes.ok(public.sem_acento('João Conceição') = 'joao conceicao', 'busca ignora acentos e maiúsculas');

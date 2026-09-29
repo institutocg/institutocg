@@ -30,11 +30,14 @@ export function CartaoAcao({
   motivos,
   mostrarGrupo = false,
   compacto = false,
+  naFicha = false,
 }: {
   cartao: Cartao;
   motivos: Motivo[];
   mostrarGrupo?: boolean;
   compacto?: boolean;
+  /** Dentro da ficha do paciente: sem o botão "Abrir paciente". */
+  naFicha?: boolean;
 }) {
   const [janela, setJanela] = useState<Janela>(null);
   const [pendente, iniciar] = useTransition();
@@ -95,7 +98,7 @@ export function CartaoAcao({
         {compacto && <p className="mt-1 text-sm text-grafite">→ {cartao.acaoRecomendada}</p>}
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {cartao.botoes.map((b) => {
+          {cartao.botoes.filter((b) => !(naFicha && b === "abrir_paciente")).map((b) => {
             switch (b) {
               case "abrir_paciente":
                 return (

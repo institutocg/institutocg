@@ -11,6 +11,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260929120200_financeiro.sql` | Orçamentos + itens, vendas, parcelas, pagamentos e lembretes financeiros automáticos |
 | `20260929120300_visoes_e_inicializacao.sql` | Visões de leitura (`v_contatos`, `v_painel_tarefas`, `v_parcelas`, `v_pendencias_financeiras`, `v_resumo_financeiro_mensal`, `v_funil`) e `inicializar_clinica()` |
 | `20260929120400_motor_de_acoes.sql` | **Motor de ações**: calendário (dias úteis e feriados), cadências, gatilhos que criam tarefas, `registrar_acao()`, `marcar_parcela_paga()`, rotina diária `preparar_dia()` e a visão `v_tarefas_abertas` usada pelo painel |
+| `20260929120500_resgate.sql` | `criar_resgate()` (tarefa de manutenção/reativação sob demanda para paciente antigo) e `sem_acento()` para a busca |
 
 ## Motor de ações — quando o sistema cria tarefas sozinho
 
