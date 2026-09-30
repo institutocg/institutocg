@@ -29,7 +29,7 @@ grant execute on all functions in schema testes to authenticated, anon;
 
 \echo '— Etapas padrão'
 select testes.ok((select string_agg(nome, ' | ' order by ordem) from public.etapas_funil where clinica_id = testes.v('f'))
-  = 'Novo contato | Em contato | Avaliação agendada | Compareceu | Orçamento apresentado | Negociação / pensando | Desmarcou | Sem resposta | Reativação | Fechou | Não fechou | Desistiu',
+  = 'Novo contato | Em contato | Avaliação agendada | Consulta realizada | Desmarcou | Sem resposta | Reativação | Fechou | Não fechou | Desistiu',
   'funil com as etapas combinadas (editáveis: nome, cor e prazo)');
 
 reset role; select testes.entrar('sec@funil.local'); set role authenticated;
@@ -38,15 +38,12 @@ select testes.guardar('lu', testes.pessoa_f('Luana Prado', '+5511920000001'));
 select testes.guardar('op_lu', testes.op_f(testes.v('lu'), 'Em contato'));
 
 \echo '— Sugestões por etapa'
-select testes.ok((select s ->> 'tipo' = 'follow_up_orcamento' and (s ->> 'vence_em')::date = testes.util_f(3)
-                  and s ->> 'titulo' = 'Retornar Luana sobre facetas de porcelana' and s ->> 'mensagem' like 'Olá, Luana!%'
-                  from public.sugerir_acao(testes.v('op_lu'), testes.etf('Orçamento apresentado')) s),
-  'orçamento apresentado → follow-up leve em 3 dias, com mensagem');
-select testes.ok((select s ->> 'tipo' = 'acompanhar_decisao' and (s ->> 'vence_em')::date = testes.util_f(4)
-                  and s ->> 'situacao' = 'pensando' and s ->> 'regra' = 'Paciente está pensando'
-                  and s ->> 'explicacao' like '%ação em 4 dias; sem resposta, mais 2 tentativas (após 6, 10 dias)%'
-                  from public.sugerir_acao(testes.v('op_lu'), testes.etf('Negociação / pensando')) s),
-  'pensando → regra "Paciente está pensando": 4 dias e depois 6 e 10 dias, explicada em palavras');
+select testes.ok((select s ->> 'tipo' = 'acompanhar_decisao' and (s ->> 'vence_em')::date = testes.util_f(3)
+                  and s ->> 'situacao' = 'pos_consulta' and s ->> 'regra' = 'Saiu da consulta sem fechar'
+                  and s ->> 'titulo' = 'Retomar com Luana depois da consulta' and s ->> 'mensagem' like 'Olá, Luana!%'
+                  and s ->> 'explicacao' like '%ação em 3 dias; sem resposta, mais 2 tentativas (após 4, 7 dias)%'
+                  from public.sugerir_acao(testes.v('op_lu'), testes.etf('Consulta realizada')) s),
+  'consulta realizada → regra "Saiu da consulta sem fechar": 3 dias e depois 4 e 7, explicada em palavras');
 select testes.ok((select s ->> 'tipo' = 'reabrir_sem_resposta' and (s ->> 'vence_em')::date = testes.util_f(7)
                   from public.sugerir_acao(testes.v('op_lu'), testes.etf('Sem resposta')) s),
   'sem resposta → nova tentativa em 7 dias');
@@ -69,11 +66,11 @@ select testes.ok((select s ->> 'requer' = 'financeiro' and s ->> 'tipo' = 'agend
   'fechou → direciona para o registro financeiro');
 
 \echo '— Mover com a ação editada pela usuária'
-select public.mover_etapa_manual(testes.v('op_lu'), testes.etf('Orçamento apresentado'), 'Apresentado na avaliação', null,
+select public.mover_etapa_manual(testes.v('op_lu'), testes.etf('Consulta realizada'), 'Apresentado na avaliação', null,
   jsonb_build_object('criar', true, 'titulo', 'Mandar áudio para a Luana', 'vence_em', testes.hoje() + 5,
                      'mensagem', 'Oi, Luana! Gravei um áudio explicando as etapas.', 'valor_centavos', 1800000));
 select testes.ok((select t.titulo = 'Mandar áudio para a Luana' and t.vence_em = testes.util_f(5)
-                  and t.mensagem_sugerida = 'Oi, Luana! Gravei um áudio explicando as etapas.' and t.regra = 'orcamento_apresentado'
+                  and t.mensagem_sugerida = 'Oi, Luana! Gravei um áudio explicando as etapas.' and t.regra = 'pos_consulta'
                   from testes.pend_op(testes.v('op_lu')) t)
              and (select count(*) from public.tarefas where oportunidade_id = testes.v('op_lu') and status = 'pendente') = 1
              and (select valor_estimado_centavos = 1800000 from public.oportunidades where id = testes.v('op_lu')),
@@ -82,10 +79,10 @@ select testes.ok((select observacao = 'Apresentado na avaliação' from public.h
                   where oportunidade_id = testes.v('op_lu') order by mudou_em desc, id desc limit 1),
   'observação da mudança vai para o histórico');
 
-select public.mover_etapa_manual(testes.v('op_lu'), testes.etf('Negociação / pensando'), null, null, '{"criar": false}');
+select public.mover_etapa_manual(testes.v('op_lu'), testes.etf('Em contato'), null, null, '{"criar": false}');
 select testes.ok((select count(*) from public.tarefas where oportunidade_id = testes.v('op_lu') and status = 'pendente') = 0,
   'a usuária pode recusar a ação automática');
-select testes.erro(format($$select public.mover_etapa_manual(%L, %L)$$, testes.v('op_lu'), testes.etf('Negociação / pensando')),
+select testes.erro(format($$select public.mover_etapa_manual(%L, %L)$$, testes.v('op_lu'), testes.etf('Em contato')),
   'já está nesta etapa', 'não move para a mesma etapa');
 
 select testes.guardar('qu', testes.pessoa_f('Quésia Rocha', '+5511920000008'));
@@ -124,7 +121,7 @@ select testes.ok((select e.nome = 'Desmarcou' from public.oportunidades o join p
 
 \echo '— Não fechou, reativação e retomada'
 select testes.guardar('ni', testes.pessoa_f('Nina Castro', '+5511920000003'));
-select testes.guardar('op_ni', testes.op_f(testes.v('ni'), 'Orçamento apresentado'));
+select testes.guardar('op_ni', testes.op_f(testes.v('ni'), 'Consulta realizada'));
 select testes.erro(format($$select public.mover_etapa_manual(%L, %L)$$, testes.v('op_ni'), testes.etf('Não fechou')),
   'Informe o motivo', '"Não fechou" exige motivo');
 select public.mover_etapa_manual(testes.v('op_ni'), testes.etf('Não fechou'), null,
@@ -165,7 +162,7 @@ select testes.ok((select count(*) from public.oportunidades where pessoa_id = te
 
 \echo '— Sem resposta'
 select testes.guardar('pe', testes.pessoa_f('Pedro Lins', '+5511920000005'));
-select testes.guardar('op_pe', testes.op_f(testes.v('pe'), 'Orçamento apresentado'));
+select testes.guardar('op_pe', testes.op_f(testes.v('pe'), 'Consulta realizada'));
 select public.mover_etapa_manual(testes.v('op_pe'), testes.etf('Sem resposta'), null, null, '{"criar": true}');
 select testes.ok((select status = 'pausada' from public.oportunidades where id = testes.v('op_pe'))
              and (select tipo = 'reabrir_sem_resposta' and vence_em = testes.util_f(7) from testes.pend_op(testes.v('op_pe'))),
@@ -183,7 +180,7 @@ select testes.ok((select e.marco = 'reativacao' and o.status = 'aberta' from pub
 
 \echo '— Fechou → financeiro'
 select testes.guardar('ra', testes.pessoa_f('Raquel Moura', '+5511920000006'));
-select testes.guardar('op_ra', testes.op_f(testes.v('ra'), 'Negociação / pensando'));
+select testes.guardar('op_ra', testes.op_f(testes.v('ra'), 'Consulta realizada'));
 select public.mover_etapa_manual(testes.v('op_ra'), testes.etf('Fechou'), null, null,
   jsonb_build_object('criar', true, 'venda', jsonb_build_object(
     'valor_total_centavos', 1500000, 'desconto_centavos', 100000, 'entrada_centavos', 200000, 'parcelas', 4,
@@ -227,7 +224,7 @@ reset role;
 \echo '— Vencimento padrão da 1ª parcela'
 select testes.entrar('sec@funil.local'); set role authenticated;
 select testes.guardar('ti', testes.pessoa_f('Tina Braga', '+5511920000009'));
-select testes.guardar('op_ti', testes.op_f(testes.v('ti'), 'Negociação / pensando'));
+select testes.guardar('op_ti', testes.op_f(testes.v('ti'), 'Consulta realizada'));
 select public.mover_etapa_manual(testes.v('op_ti'), testes.etf('Fechou'), null, null,
   jsonb_build_object('criar', false, 'venda', jsonb_build_object('valor_total_centavos', 600000, 'entrada_centavos', 100000, 'parcelas', 2)));
 select testes.ok((select min(vencimento) filter (where numero = 1) = testes.hoje() + 30

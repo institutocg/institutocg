@@ -49,12 +49,13 @@ test("painel completo: atrasadas, urgente, importante, rotina e próximos dias",
   await expect(bloco(page, "Rotina").getByRole("article")).toHaveCount(2);
   await expect(bloco(page, "Próximos dias").getByRole("article")).toHaveCount(2);
 
-  // Exemplo 1: Maria — orçamento enviado
+  // Exemplo 1: Maria — saiu da consulta sem fechar
   const maria = cartao(page, "Maria Silva");
   await expect(maria.getByText("Facetas de porcelana", { exact: true })).toBeVisible();
-  await expect(maria.getByText("Orçamento de R$ 14.000,00 enviado há 7 dias")).toBeVisible();
+  await expect(maria.getByText("Recebeu o orçamento de R$ 14.000,00 na consulta há 7 dias")).toBeVisible();
   await expect(maria.getByText("Ação recomendada")).toBeVisible();
-  await expect(maria.getByText("Fazer follow-up hoje", { exact: false })).toBeVisible();
+  await expect(maria.getByText("Retomar com Maria depois da consulta")).toBeVisible();
+  await expect(maria.getByText("Criada pela regra “Saiu da consulta sem fechar”")).toBeVisible();
   for (const b of ["Ver mensagem", "Registrar contato", "Concluir"]) {
     await expect(maria.getByRole("button", { name: b })).toBeVisible();
   }
@@ -98,7 +99,7 @@ test("ver mensagem sugerida: texto editável e link do WhatsApp", async ({ page 
 test("concluir: a tarefa sai de hoje e o próximo follow-up é criado sozinho", async ({ page }) => {
   await entrar(page, "secretaria@institutocg.local");
   await cartao(page, "Maria Silva").getByRole("button", { name: "Concluir" }).click();
-  await expect(page.getByRole("status")).toContainText("Tarefa concluída. Próxima ação: Retornar Maria sobre facetas de porcelana");
+  await expect(page.getByRole("status")).toContainText("Tarefa concluída. Próxima ação: Retomar com Maria depois da consulta");
   await expect(bloco(page, "Importante").getByRole("article", { name: "Maria Silva" })).toHaveCount(0);
   await expect(bloco(page, "Próximos dias").getByRole("article", { name: "Maria Silva" })).toBeVisible();
 });
@@ -125,7 +126,7 @@ test("desmarcou: a regra aparece no cartão e o contato oferece as 5 respostas",
   await entrar(page, "secretaria@institutocg.local");
   const carla = bloco(page, "Urgente").getByRole("article", { name: "Carla Mendes" });
   await expect(carla).toContainText("Entrar em contato com Carla para remarcar");
-  await expect(carla).toContainText("Criada pela regra “Paciente desmarcou”");
+  await expect(carla).toContainText("Criada pela regra “Desmarcou ou faltou”");
   await expect(carla.getByRole("button", { name: "Concluir" })).toHaveCount(0);
 
   await carla.getByRole("button", { name: "Registrar contato" }).click();
@@ -198,8 +199,7 @@ test("abrir paciente mostra a ficha com o histórico", async ({ page }) => {
   await cartao(page, "Marcos Tavares").getByRole("link", { name: "Abrir paciente" }).click();
   await expect(page.getByRole("heading", { name: "Marcos Tavares", level: 1 })).toBeVisible();
   await expect(page.getByRole("region", { name: "Interesse" }).getByText("Periodontia")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Funil" }).locator('[aria-current="step"]')).toHaveText("Orçamento apresentado");
-  await expect(page.getByRole("region", { name: "Histórico" }).getByText("Etapa: Compareceu → Orçamento apresentado")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Funil" }).locator('[aria-current="step"]')).toHaveText("Consulta realizada");
   await page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: "Hoje" }).click();
   await expect(page).toHaveURL(/\/hoje$/);
 });

@@ -186,8 +186,8 @@ export function MudarEtapa({
           </Rotulo>
         )}
 
-        {destino?.etapa.marco === "orcamento_apresentado" && (
-          <Rotulo texto="Valor do orçamento (opcional)">
+        {destino?.etapa.marco === "avaliacao_realizada" && (
+          <Rotulo texto="Valor do orçamento apresentado na consulta (opcional)">
             <input inputMode="decimal" placeholder="Ex.: 14.000" value={valor} onChange={(e) => setValor(e.target.value)} className={CAMPO} />
           </Rotulo>
         )}

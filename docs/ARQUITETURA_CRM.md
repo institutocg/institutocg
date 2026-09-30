@@ -965,7 +965,7 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 
 ## 14.4 Funil comercial (implementado)
 
-**Etapas** (nome, cor e prazo editáveis; o papel de cada uma é fixo): Novo contato → Em contato → Avaliação agendada → Compareceu → Orçamento apresentado → Negociação / pensando · Desmarcou · Sem resposta · Reativação · Fechou · Não fechou (inclui "Desistiu", pelo motivo). "Orçamento apresentado" foi acrescentada à sugestão inicial porque "quem recebeu orçamento" é uma das perguntas centrais.
+**Etapas** (nome, cor e prazo editáveis; o papel de cada uma é fixo): Novo contato → Em contato → Avaliação agendada → Consulta realizada · Desmarcou · Sem resposta · Reativação · Fechou · Não fechou (inclui "Desistiu", pelo motivo). "Compareceu", "Orçamento apresentado" e "Negociação / pensando" foram unificadas em **Consulta realizada**, porque o orçamento é apresentado na própria consulta (não por WhatsApp).
 
 **Quadro (kanban):** cartões com nome, procedimento, 1º contato, última interação, próxima ação (em vermelho se atrasada ou ausente), valor potencial (orçamento, valor fechado ou estimado) e tempo na etapa (âmbar quando passa do prazo). Arrastar entre colunas ou usar "Mover" (celular/teclado). Colunas encerradas mostram os últimos 30 dias. Filtros por nome, procedimento e responsável.
 
@@ -976,9 +976,7 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 | Novo contato | Primeiro retorno hoje |
 | Em contato | Conduzir para a avaliação (amanhã) |
 | Avaliação agendada | Data e horário → confirmação na véspera; sem data → "combinar a data" |
-| Compareceu | Registrar o orçamento (hoje) |
-| Orçamento apresentado | Follow-up leve em 3 dias (+ valor do orçamento, opcional) |
-| Negociação / pensando | Sequência sem pressão: 4 dias, depois +6 e +10 (regra editável) |
+| Consulta realizada | Contato em 3 dias para tirar dúvidas, depois +4 e +7 (+ valor do orçamento, opcional) |
 | Desmarcou | "Entrar em contato para remarcar" no dia seguinte (o agendamento é marcado como desmarcado) |
 | Sem resposta | Nova tentativa em 7 dias e mais uma após 14; depois vai para "Reativação" (contato em 60 dias) |
 | Reativação | Reaproximação (negociação nova ligada à anterior) |
@@ -991,9 +989,9 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 
 ## 14.5 Follow-up inteligente e regras configuráveis (implementado)
 
-**Regra principal: nenhum lead fica esquecido.** Cada situação comercial tem uma regra (`regras_followup`) que diz o que aconteceu, o que fazer, quando e com qual mensagem. A tela **Configurações** mostra cada regra em linguagem simples ("Ação no dia seguinte; sem resposta, mais 2 tentativas (após 3 e 4 dias). Depois disso, vai para “Sem resposta”.") e a administradora altera: ligar/desligar, título da tarefa, prazo, novas tentativas (máx. 5), prioridade, o que fazer se continuar sem resposta, período (meses) e o texto da mensagem sugerida. A secretária consulta, mas não altera. Limites gerais: reativações por dia e intervalo mínimo entre contatos.
+**Regra principal: nenhum lead fica esquecido.** Cada situação comercial tem uma regra (`regras_followup`) que diz o que aconteceu, o que fazer, quando e com qual mensagem. A tela **Configurações** mostra seis casos (Novo lead, Saiu da consulta sem fechar, Parou de responder, Desmarcou ou faltou, Não fechou, Fechou) e o grupo Paciente antigo, cada um em linguagem simples ("Ação no dia seguinte; sem resposta, mais 2 tentativas (após 3 e 4 dias). Depois disso, vai para “Sem resposta”.") e a administradora altera: ligar/desligar, título da tarefa, prazo, novas tentativas (máx. 5), prioridade, o que fazer se continuar sem resposta, período (meses) e o texto da mensagem sugerida. A secretária consulta, mas não altera. Limites gerais: reativações por dia e intervalo mínimo entre contatos.
 
-**Exemplos pedidos:** novo lead → primeiro contato hoje; orçamento enviado → follow-up em 3 dias; pensando → acompanhamento em 4 dias; parou de responder → nova tentativa e, sem resposta, etapa "Reativação"; **desmarcou em 10/10 → tarefa "Entrar em contato com X para remarcar" em 11/10**; não fechou → motivo registrado e retomada futura; fechou → sai do funil de vendas e fica "em tratamento" (botão **Concluir tratamento** na ficha agenda o convite de revisão em 6 meses); paciente antigo → campanhas de reativação.
+**Casos (simplificados a pedido da clínica):** novo lead → primeiro contato hoje; saiu da consulta sem fechar (orçamento apresentado na consulta; "vou pensar") → contato em 3 dias; parou de responder → nova tentativa e, sem resposta, etapa "Reativação"; **desmarcou em 10/10 → tarefa "Entrar em contato com X para remarcar" em 11/10**; não fechou → motivo registrado e retomada futura; fechou → sai do funil de vendas e fica "em tratamento" (botão **Concluir tratamento** na ficha agenda o convite de revisão em 6 meses); paciente antigo → campanhas de reativação.
 
 **Registrar contato** (desmarcou, faltou, sem resposta): *Remarcou · Pediu para falar depois · Não respondeu · Não tem interesse · Outro*. Reativações também têm *Respondeu com interesse* e *Não quer mais contato*. O cartão mostra "Criada pela regra …".
 

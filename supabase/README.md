@@ -19,23 +19,24 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 
 Cada situação comercial tem uma linha em `regras_followup` (editável em **Configurações**, só pela administradora). A regra responde às quatro perguntas: **o que aconteceu** (situação), **o que fazer** (tarefa e prioridade), **quando** (prazo e novas tentativas) e **com qual mensagem** (`modelos_mensagem`). Tudo é disparado por eventos e datas — ninguém precisa criar tarefas à mão.
 
-| Situação (regra) | Padrão |
+A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos entre eles ficam recolhidos.
+
+| Caso (regra) | Padrão |
 |---|---|
-| Novo lead | Primeiro contato hoje, urgente; sem resposta: +1 e +2 dias; depois → "Sem resposta" |
-| Demonstrou interesse | Conduzir para a avaliação no dia seguinte; +3 e +4 dias; depois → "Sem resposta" |
-| Confirmar consulta | 1 dia útil antes; sem resposta, nova tentativa no dia da consulta |
-| Compareceu à avaliação | Registrar o orçamento, no mesmo dia |
-| Orçamento enviado | Follow-up em 3 dias; +4 e +7 dias; depois → "Sem resposta" |
-| Paciente está pensando | Acompanhar em 4 dias; +6 e +10 dias; depois → "Sem resposta" |
-| Paciente desmarcou | **"Entrar em contato com X para remarcar" no dia seguinte** (desmarcou dia 10 → tarefa dia 11), urgente; +3 e +4 dias |
-| Paciente faltou | Contato no dia seguinte; +2 e +3 dias |
+| Novo lead | Primeiro contato hoje, urgente; sem resposta: +1 e +2 dias; depois → "Parou de responder" |
+| Saiu da consulta sem fechar | O orçamento é apresentado na consulta. Contato em 3 dias para tirar dúvidas; +4 e +7 dias; depois → "Parou de responder" |
 | Parou de responder | Nova tentativa em 7 dias; +14 dias; depois → "Reativação", com contato leve em 60 dias |
-| Não fechou | Retomada no prazo do motivo (ex.: valor alto = 30 dias; "parou de responder" = 90) |
+| Desmarcou ou faltou | **"Entrar em contato com X para remarcar" no dia seguinte** (desmarcou dia 10 → tarefa dia 11), urgente; +3 e +4 dias. Quem faltou recebe a mensagem própria de falta |
+| Não fechou | Motivo obrigatório; retomada no prazo do motivo (ex.: valor alto = 30 dias; "parou de responder" = 90) |
 | Fechou | Agendar o início do tratamento; a pessoa sai do funil de vendas e fica "em tratamento" |
-| Reativação | Contato no dia; +21 dias; depois a usuária decide |
-| Pacientes antigos sem atendimento | X meses sem atendimento (padrão 6) — **desligada** durante o recadastramento |
-| Manutenção devida | Ciclo de retorno do procedimento — **desligada** durante o recadastramento |
-| Retorno após o tratamento | Convite para revisão 6 meses após `concluir_tratamento()` |
+| Paciente antigo → sem atendimento | X meses sem atendimento (padrão 6) — **desligada** durante o recadastramento |
+| Paciente antigo → retorno após o tratamento | Convite para revisão 6 meses após `concluir_tratamento()` |
+| Paciente antigo → manutenção devida | Ciclo de retorno do procedimento — **desligada** durante o recadastramento |
+| *Automático:* respondeu com interesse | Conduzir para a avaliação no dia seguinte |
+| *Automático:* confirmar consulta | 1 dia útil antes; sem resposta, nova tentativa no dia da consulta |
+| *Automático:* entrou em "Reativação" | Contato no dia; +21 dias; depois a usuária decide |
+
+**Funil:** Novo contato → Em contato → Avaliação agendada → **Consulta realizada** (passou pela consulta, recebeu o orçamento e está decidindo) → Fechou / Não fechou, mais Desmarcou, Sem resposta e Reativação.
 
 **Ao registrar o contato**, a usuária escolhe o resultado e ele define o próximo passo: *remarcou* (novo agendamento + confirmação), *pediu para falar depois* (tarefa na data combinada), *não respondeu* (próxima tentativa da regra; esgotadas, o que a regra mandar: "Sem resposta", "Reativação", encerrar como "Não fechou — parou de responder" ou pedir decisão), *não tem interesse* (encerra como "Desistiu — sem interesse no momento", com retomada leve em 180 dias) ou *outro* (descrição obrigatória, data opcional). Sem registro, a tarefa continua pendente (e aparece como atrasada).
 

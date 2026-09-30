@@ -8,11 +8,8 @@ export type Situacao =
   | "novo_contato"
   | "em_contato"
   | "confirmacao"
-  | "compareceu"
-  | "orcamento_apresentado"
-  | "pensando"
+  | "pos_consulta"
   | "desmarcou"
-  | "faltou"
   | "sem_resposta"
   | "nao_fechou"
   | "fechou"
@@ -42,27 +39,26 @@ export interface Regra {
   mensagem: string | null;
 }
 
+/** Os casos que a clínica acompanha (tela Configurações). */
 export const GRUPOS: { titulo: string; descricao: string; situacoes: Situacao[] }[] = [
   {
-    titulo: "Vendas",
-    descricao: "Do primeiro contato ao fechamento.",
-    situacoes: ["novo_contato", "em_contato", "confirmacao", "compareceu", "orcamento_apresentado", "pensando", "fechou"],
+    titulo: "Casos",
+    descricao: "O que o sistema faz em cada situação comercial.",
+    situacoes: ["novo_contato", "pos_consulta", "sem_resposta", "desmarcou", "nao_fechou", "fechou"],
   },
   {
-    titulo: "Recuperação",
-    descricao: "Quando algo não saiu como o combinado.",
-    situacoes: ["desmarcou", "faltou", "sem_resposta", "nao_fechou"],
-  },
-  {
-    titulo: "Reativação",
-    descricao: "Pacientes que já passaram pela clínica.",
-    situacoes: ["reativacao", "paciente_inativo", "manutencao", "pos_tratamento"],
+    titulo: "Paciente antigo",
+    descricao: "Reativação de quem já passou pela clínica. As campanhas ficam no menu Campanhas.",
+    situacoes: ["paciente_inativo", "pos_tratamento", "manutencao"],
   },
 ];
 
+/** Passos automáticos entre um caso e outro (ficam recolhidos na tela). */
+export const AUTOMATICAS: Situacao[] = ["em_contato", "confirmacao", "reativacao"];
+
 /** Situações em que "não respondeu" gera novas tentativas (e, no fim, o que fazer). */
 const COM_TENTATIVAS: Situacao[] = [
-  "novo_contato", "em_contato", "orcamento_apresentado", "pensando", "desmarcou", "faltou", "sem_resposta",
+  "novo_contato", "em_contato", "pos_consulta", "desmarcou", "sem_resposta",
   "reativacao", "paciente_inativo", "manutencao", "pos_tratamento",
 ];
 

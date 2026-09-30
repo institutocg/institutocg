@@ -33,7 +33,7 @@ create function testes.regra_r(sit text) returns public.regras_followup language
 grant execute on all functions in schema testes to authenticated, anon;
 
 \echo '— Regras padrão'
-select testes.ok((select count(*) = 15 from public.regras_followup where clinica_id = testes.v('r'))
+select testes.ok((select count(*) = 12 from public.regras_followup where clinica_id = testes.v('r'))
              and (select prazo_dias = 1 and titulo_modelo = 'Entrar em contato com {primeiro_nome} para remarcar'
                   from testes.regra_r('desmarcou'))
              and (select not ativa and periodo_meses = 6 from testes.regra_r('paciente_inativo'))
@@ -46,7 +46,7 @@ select testes.ok((select prazo_dias = 1 from testes.regra_r('desmarcou')),
   'secretária vê as regras, mas não altera');
 
 reset role; select testes.entrar('dona@regras.local'); set role authenticated;
-select testes.erro($$update public.regras_followup set intervalos = '{1,2,3,4,5,6}' where clinica_id = testes.v('r') and situacao = 'pensando'$$,
+select testes.erro($$update public.regras_followup set intervalos = '{1,2,3,4,5,6}' where clinica_id = testes.v('r') and situacao = 'pos_consulta'$$,
   'check', 'no máximo 5 tentativas extras (evita insistência)');
 update public.regras_followup set prazo_dias = 2, titulo_modelo = 'Ligar para {primeiro_nome} e remarcar'
  where clinica_id = testes.v('r') and situacao = 'desmarcou';
@@ -66,8 +66,19 @@ update public.agendamentos set status = 'desmarcado' where id = testes.v('ag_al'
 select testes.ok((select t.titulo = 'Ligar para Alice e remarcar' and t.vence_em = testes.util_r(2) and t.regra = 'desmarcou'
                   from testes.pend_r(testes.v('al')) t),
   'desmarcou: prazo e título seguem a regra editada (2 dias, "Ligar para Alice e remarcar")');
-select testes.ok((select regra_nome = 'Paciente desmarcou' from public.v_tarefas_abertas where pessoa_id = testes.v('al')),
+select testes.ok((select regra_nome = 'Desmarcou ou faltou' from public.v_tarefas_abertas where pessoa_id = testes.v('al')),
   'o painel sabe qual regra criou a tarefa');
+
+-- Faltou usa a mesma regra, com a mensagem de quem faltou.
+select testes.guardar('gi', testes.pessoa_r('Giovana Luz', '+5511930000007'));
+select testes.guardar('op_gi', testes.op_r(testes.v('gi'), 'Em contato'));
+insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, tipo, inicio)
+values (testes.v('r'), testes.v('gi'), testes.v('op_gi'), 'avaliacao', now() + interval '1 day');
+update public.agendamentos set status = 'faltou' where pessoa_id = testes.v('gi');
+select testes.ok((select t.tipo = 'recuperar_falta' and t.regra = 'desmarcou' and t.titulo = 'Ligar para Giovana e remarcar'
+                     and t.vence_em = testes.util_r(2) and t.mensagem_sugerida like 'Olá, Giovana! Sentimos sua falta%'
+                  from testes.pend_r(testes.v('gi')) t),
+  'faltou: mesma regra de "Desmarcou ou faltou", com a mensagem de quem faltou');
 
 \echo '— Registrar contato: não tem interesse / outro'
 select testes.erro(format($$select public.registrar_acao(%L, 'outro')$$, (testes.pend_r(testes.v('al'))).id),
@@ -88,15 +99,13 @@ select testes.ok((select o.resultado = 'desistiu' and m.nome = 'Sem interesse no
 \echo '— Tentativas esgotadas'
 reset role; select testes.entrar('dona@regras.local'); set role authenticated;
 update public.regras_followup set intervalos = '{}', ao_esgotar = 'encerrar'
- where clinica_id = testes.v('r') and situacao = 'orcamento_apresentado';
+ where clinica_id = testes.v('r') and situacao = 'em_contato';
 update public.regras_followup set intervalos = '{2}', ao_esgotar = 'decidir'
- where clinica_id = testes.v('r') and situacao = 'pensando';
+ where clinica_id = testes.v('r') and situacao = 'pos_consulta';
 reset role; select testes.entrar('sec@regras.local'); set role authenticated;
 
 select testes.guardar('bea', testes.pessoa_r('Beatriz Nunes', '+5511930000002'));
 select testes.guardar('op_bea', testes.op_r(testes.v('bea'), 'Em contato'));
-insert into public.orcamentos (clinica_id, pessoa_id, oportunidade_id, status, valor_total_centavos, apresentado_em)
-values (testes.v('r'), testes.v('bea'), testes.v('op_bea'), 'apresentado', 150000, testes.hoje());
 select public.registrar_acao((testes.pend_r(testes.v('bea'))).id, 'nao_respondeu');
 select testes.ok((select o.resultado = 'nao_fechou' and m.nome = 'Parou de responder'
                   from public.oportunidades o join public.motivos m on m.id = o.motivo_id where o.id = testes.v('op_bea'))
@@ -105,10 +114,10 @@ select testes.ok((select o.resultado = 'nao_fechou' and m.nome = 'Parou de respo
 
 select testes.guardar('cris', testes.pessoa_r('Cristiane Melo', '+5511930000003'));
 select testes.guardar('op_cris', testes.op_r(testes.v('cris'), 'Em contato'));
-select public.mover_etapa_manual(testes.v('op_cris'), testes.etr('Negociação / pensando'), null, null, '{"criar": true}');
+select public.mover_etapa_manual(testes.v('op_cris'), testes.etr('Consulta realizada'), null, null, '{"criar": true}');
 select public.registrar_acao((testes.pend_r(testes.v('cris'))).id, 'nao_respondeu');
 select testes.ok((select passo = 2 and vence_em = testes.util_r(2) from testes.pend_r(testes.v('cris'))),
-  'pensando: 2ª tentativa com o intervalo editado (2 dias)');
+  'saiu da consulta sem fechar: 2ª tentativa com o intervalo editado (2 dias)');
 select public.registrar_acao((testes.pend_r(testes.v('cris'))).id, 'nao_respondeu');
 select testes.ok((select tipo = 'definir_proxima_acao' and descricao like '%2 tentativas%' from testes.pend_r(testes.v('cris'))),
   'regra com "decidir": depois das tentativas, a usuária decide o próximo passo');
@@ -127,14 +136,14 @@ select testes.ok((select tipo = 'definir_proxima_acao' from testes.pend_r(testes
 
 \echo '— Regra desligada'
 reset role; select testes.entrar('dona@regras.local'); set role authenticated;
-update public.regras_followup set ativa = false where clinica_id = testes.v('r') and situacao = 'compareceu';
+update public.regras_followup set ativa = false where clinica_id = testes.v('r') and situacao = 'pos_consulta';
 reset role; select testes.entrar('sec@regras.local'); set role authenticated;
 select testes.guardar('dani', testes.pessoa_r('Daniela Paz', '+5511930000004'));
 select testes.guardar('op_dani', testes.op_r(testes.v('dani'), 'Em contato'));
 select testes.ok((select s ->> 'tipo' is null and s ->> 'explicacao' like '%desligada%'
-                  from public.sugerir_acao(testes.v('op_dani'), testes.etr('Compareceu')) s),
+                  from public.sugerir_acao(testes.v('op_dani'), testes.etr('Consulta realizada')) s),
   'regra desligada: o funil avisa que não haverá ação automática');
-select public.mover_etapa(testes.v('op_dani'), testes.etr('Compareceu'));
+select public.mover_etapa(testes.v('op_dani'), testes.etr('Consulta realizada'));
 update public.tarefas set status = 'cancelada', cancelada_motivo = 'teste' where pessoa_id = testes.v('dani') and status = 'pendente';
 reset role;
 select public.preparar_dia(testes.v('r'), true);
@@ -144,7 +153,7 @@ select testes.ok((select tipo = 'definir_proxima_acao' from testes.pend_r(testes
 \echo '— Fechou → tratamento → retorno'
 select testes.entrar('sec@regras.local'); set role authenticated;
 select testes.guardar('eli', testes.pessoa_r('Elisa Prado', '+5511930000005'));
-select testes.guardar('op_eli', testes.op_r(testes.v('eli'), 'Negociação / pensando'));
+select testes.guardar('op_eli', testes.op_r(testes.v('eli'), 'Consulta realizada'));
 select public.mover_etapa_manual(testes.v('op_eli'), testes.etr('Fechou'), null, null, '{"criar": true}');
 select testes.ok((select em_tratamento from public.pessoas where id = testes.v('eli'))
              and (select status_atual = 'em_tratamento' from public.v_contatos where id = testes.v('eli')),

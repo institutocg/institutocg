@@ -30,16 +30,16 @@ test("quadro com todas as etapas e cartões completos", async ({ page }) => {
   await page.goto("/funil");
   const nomes = await page.getByRole("listitem").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
   expect(nomes).toEqual([
-    "Novo contato", "Em contato", "Avaliação agendada", "Compareceu", "Orçamento apresentado",
-    "Negociação / pensando", "Desmarcou", "Sem resposta", "Reativação", "Fechou", "Não fechou",
+    "Novo contato", "Em contato", "Avaliação agendada", "Consulta realizada",
+    "Desmarcou", "Sem resposta", "Reativação", "Fechou", "Não fechou",
   ]);
 
-  const maria = coluna(page, "Orçamento apresentado").getByRole("article", { name: "Maria Silva" });
+  const maria = coluna(page, "Consulta realizada").getByRole("article", { name: "Maria Silva" });
   await expect(maria.getByText("Facetas de porcelana", { exact: true })).toBeVisible();
   await expect(maria.getByText("R$ 14.000")).toBeVisible(); // valor potencial (orçamento)
   await expect(maria.getByText("1º contato")).toBeVisible();
   await expect(maria.getByText("Última interação")).toBeVisible();
-  await expect(maria.getByText("Retornar Maria sobre facetas de porcelana")).toBeVisible();
+  await expect(maria.getByText("Retomar com Maria depois da consulta")).toBeVisible();
 
   await expect(coluna(page, "Desmarcou").getByRole("article", { name: "Carla Mendes" })).toBeVisible();
   await expect(coluna(page, "Sem resposta").getByRole("article", { name: "Tiago Moreira" })).toBeVisible();
@@ -89,12 +89,12 @@ test("não fechou: exige motivo e agenda uma retomada leve", async ({ page }) =>
 test("recusar a ação automática deixa o cartão sinalizado", async ({ page }) => {
   await entrar(page);
   await page.goto("/funil");
-  await mover(page, "João Lima", "Negociação / pensando");
-  await expect(janela(page).getByText(/Regra “Paciente está pensando”: ação em 4 dias; sem resposta, mais 2 tentativas \(após 6, 10 dias\)/)).toBeVisible();
+  await mover(page, "João Lima", "Consulta realizada");
+  await expect(janela(page).getByText(/Regra “Saiu da consulta sem fechar”: ação em 3 dias; sem resposta, mais 2 tentativas \(após 4, 7 dias\)/)).toBeVisible();
   await janela(page).getByLabel("Criar a próxima ação").uncheck();
   await janela(page).getByRole("button", { name: "Mover" }).click();
   await expect(page.getByRole("status").filter({ hasText: "João foi para" })).toContainText("Nenhuma ação programada.");
-  await expect(coluna(page, "Negociação / pensando").getByRole("article", { name: "João Lima" }).getByText("Sem próxima ação")).toBeVisible();
+  await expect(coluna(page, "Consulta realizada").getByRole("article", { name: "João Lima" }).getByText("Sem próxima ação")).toBeVisible();
 });
 
 test("desmarcou: contato para remarcar no dia seguinte", async ({ page }) => {
@@ -102,7 +102,7 @@ test("desmarcou: contato para remarcar no dia seguinte", async ({ page }) => {
   await page.goto("/funil");
   await mover(page, "Rafael Gomes", "Desmarcou");
   await expect(janela(page).getByLabel("O que fazer")).toHaveValue("Entrar em contato com Rafael para remarcar");
-  await expect(janela(page).getByText(/Regra “Paciente desmarcou”: ação no dia seguinte/)).toBeVisible();
+  await expect(janela(page).getByText(/Regra “Desmarcou ou faltou”: ação no dia seguinte/)).toBeVisible();
   await janela(page).getByRole("button", { name: "Mover" }).click();
   await expect(coluna(page, "Desmarcou").getByRole("article", { name: "Rafael Gomes" })).toBeVisible();
   await page.goto("/hoje");

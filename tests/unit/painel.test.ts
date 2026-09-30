@@ -195,9 +195,12 @@ describe("textos do cartão", () => {
     expect(acaoRecomendada({ ...t, vence_em: "2026-10-05" }, HOJE)).toBe("Retornar na data combinada.");
   });
 
-  it("quem está pensando recebe acompanhamento leve, que muda a cada contato", () => {
+  it("saiu da consulta sem fechar: acompanhamento leve, que muda a cada contato", () => {
     const t = tarefa({ tipo: "acompanhar_decisao", descricao: "Ficou de pensar", orcamento_valor_centavos: 900_000 });
-    expect(motivoDoContato(t, HOJE)).toBe("Ficou de pensar — orçamento de R$ 9.000,00");
+    expect(motivoDoContato(t, HOJE)).toBe("Passou pela consulta e está decidindo (orçamento de R$ 9.000,00) — ficou de pensar");
+    expect(motivoDoContato({ ...t, orcamento_apresentado_em: "2026-09-22" }, HOJE)).toBe(
+      "Recebeu o orçamento de R$ 9.000,00 na consulta há 7 dias — ficou de pensar",
+    );
     expect(acaoRecomendada(t, HOJE)).toContain("sem pressionar");
     expect(acaoRecomendada({ ...t, passo: 2 }, HOJE)).toContain("conversa com a doutora");
     expect(acaoRecomendada({ ...t, passo: 3 }, HOJE)).toContain("porta aberta");

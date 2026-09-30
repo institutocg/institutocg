@@ -82,3 +82,12 @@ describe("campanhas", () => {
     expect(taxa(0, 0)).toBe("—");
   });
 });
+
+describe("casos na tela de Configurações", () => {
+  it("seis casos, paciente antigo e os passos automáticos recolhidos", async () => {
+    const { GRUPOS, AUTOMATICAS } = await import("@/modules/regras/regras");
+    expect(GRUPOS[0].situacoes).toEqual(["novo_contato", "pos_consulta", "sem_resposta", "desmarcou", "nao_fechou", "fechou"]);
+    expect(GRUPOS[1].situacoes).toEqual(["paciente_inativo", "pos_tratamento", "manutencao"]);
+    expect(AUTOMATICAS).toEqual(["em_contato", "confirmacao", "reativacao"]);
+  });
+});

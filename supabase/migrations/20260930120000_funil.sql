@@ -159,7 +159,8 @@ revoke execute on function public.avancar_para_marco(uuid, text, text) from publ
 revoke execute on function public.aplicar_sugestao(uuid, text, boolean) from public, anon, authenticated;
 revoke execute on function public.abrir_reativacao(uuid, uuid, uuid, public.tipo_tarefa, text, text, date, text, text,
   public.prioridade_tarefa) from public, anon, authenticated;
-revoke execute on function public.criar_por_regra(text, uuid, uuid, text, date, date, uuid, text, jsonb, boolean)
+revoke execute on function public.criar_por_regra(text, uuid, uuid, text, date, date, uuid, text, jsonb, boolean,
+  public.tipo_tarefa)
   from public, anon, authenticated;
 revoke execute on function public.regra(uuid, text) from public, anon, authenticated;
 revoke execute on function public.renderizar_texto(text, uuid, text, jsonb) from public, anon, authenticated;

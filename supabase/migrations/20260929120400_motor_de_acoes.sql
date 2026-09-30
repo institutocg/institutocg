@@ -106,11 +106,11 @@ as $$
     when 'primeiro_contato'      then 'novo_contato'
     when 'follow_up'             then 'em_contato'
     when 'confirmar_agendamento' then 'confirmacao'
-    when 'apresentar_orcamento'  then 'compareceu'
-    when 'follow_up_orcamento'   then 'orcamento_apresentado'
-    when 'acompanhar_decisao'    then 'pensando'
+    when 'apresentar_orcamento'  then 'pos_consulta'
+    when 'follow_up_orcamento'   then 'pos_consulta'
+    when 'acompanhar_decisao'    then 'pos_consulta'
     when 'recuperar_desmarcacao' then 'desmarcou'
-    when 'recuperar_falta'       then 'faltou'
+    when 'recuperar_falta'       then 'desmarcou'
     when 'reabrir_sem_resposta'  then 'sem_resposta'
     when 'retorno_por_motivo'    then 'nao_fechou'
     when 'agendar_tratamento'    then 'fechou'
@@ -446,9 +446,8 @@ begin
     when et.marco = 'novo_contato' then 'novo_contato'
     when et.marco = 'em_contato' then 'em_contato'
     when et.marco = 'avaliacao_agendada' then 'confirmacao'
-    when et.marco = 'avaliacao_realizada' then 'compareceu'
-    when et.marco = 'orcamento_apresentado' then 'orcamento_apresentado'
-    when et.marco = 'em_negociacao' then 'pensando'
+    -- "Consulta realizada": o orçamento é apresentado na consulta; a pessoa está decidindo.
+    when et.marco in ('avaliacao_realizada', 'orcamento_apresentado', 'em_negociacao') then 'pos_consulta'
     when et.marco = 'desmarcou' then 'desmarcou'
     when et.marco = 'reativacao' then 'reativacao'
     when et.resultado = 'fechou' then 'fechou'
@@ -545,7 +544,8 @@ create or replace function public.criar_por_regra(
   p_agendamento  uuid default null,
   p_descricao    text default null,
   p_extras       jsonb default '{}'::jsonb,
-  p_substituir   boolean default false
+  p_substituir   boolean default false,
+  p_tipo         public.tipo_tarefa default null
 )
 returns uuid
 language plpgsql
@@ -556,6 +556,7 @@ declare
   v_clinica uuid := (select clinica_id from public.pessoas where id = p_pessoa);
   r         public.regras_followup := public.regra(v_clinica, p_situacao);
   v_proc    text;
+  v_tipo    public.tipo_tarefa;
 begin
   if r.id is null or not r.ativa then return null; end if;
   select pr.nome into v_proc from public.oportunidades o join public.procedimentos pr on pr.id = o.procedimento_id
@@ -564,12 +565,15 @@ begin
     update public.tarefas set status = 'cancelada', cancelada_motivo = 'Substituída pela nova próxima ação'
      where chave_dedupe = 'op:' || p_oportunidade and status = 'pendente';
   end if;
+  v_tipo := coalesce(p_tipo, r.tipo_tarefa);
   return public.criar_tarefa_auto(
-    p_pessoa, p_oportunidade, r.tipo_tarefa, public.categoria_do_tipo(r.tipo_tarefa),
+    p_pessoa, p_oportunidade, v_tipo, public.categoria_do_tipo(v_tipo),
     public.renderizar_texto(r.titulo_modelo, p_pessoa, v_proc, p_extras),
     coalesce(p_vence, coalesce(p_base, public.hoje_clinica(v_clinica)) + coalesce(r.prazo_dias, 0)),
     r.prioridade, p_situacao, p_chave, 1, p_descricao, p_agendamento,
-    public.renderizar_mensagem(v_clinica, coalesce(r.mensagem_situacao, r.tipo_tarefa::text), p_pessoa, v_proc, p_extras));
+    public.renderizar_mensagem(v_clinica,
+      case when p_tipo is not null then p_tipo::text else coalesce(r.mensagem_situacao, r.tipo_tarefa::text) end,
+      p_pessoa, v_proc, p_extras));
 end;
 $$;
 
@@ -736,12 +740,13 @@ begin
   if public.acao_manual() then return null; end if;
 
   if new.status in ('desmarcado', 'faltou') then
-    -- Regra "Paciente desmarcou"/"Paciente faltou" (ex.: desmarcou dia 10 → contato dia 11).
+    -- Regra "Desmarcou ou faltou" (ex.: desmarcou dia 10 → contato dia 11). A falta usa a
+    -- mesma regra, com a mensagem própria de quem faltou.
     perform public.criar_por_regra(
-      case when new.status = 'faltou' then 'faltou' else 'desmarcou' end,
-      new.pessoa_id, new.oportunidade_id, v_chave, p_base => v_hoje, p_agendamento => new.id,
+      'desmarcou', new.pessoa_id, new.oportunidade_id, v_chave, p_base => v_hoje, p_agendamento => new.id,
       p_descricao => case when new.status = 'faltou' then 'Faltou ao agendamento de ' else 'Desmarcou o agendamento de ' end || v_quando,
-      p_substituir => true);
+      p_substituir => true,
+      p_tipo => case when new.status = 'faltou' then 'recuperar_falta'::public.tipo_tarefa end);
 
   elsif new.status = 'cancelado_clinica' then
     perform public.criar_tarefa_auto(
@@ -750,12 +755,10 @@ begin
       p_agendamento => new.id, p_descricao => 'A clínica cancelou o horário');
 
   elsif new.status = 'compareceu' and new.tipo = 'avaliacao' and new.oportunidade_id is not null then
-    perform public.avancar_para_marco(new.oportunidade_id, 'avaliacao_realizada', 'Compareceu à avaliação');
-    if not exists (select 1 from public.orcamentos o where o.oportunidade_id = new.oportunidade_id
-                    and o.status in ('apresentado', 'em_negociacao', 'aprovado')) then
-      perform public.criar_por_regra('compareceu', new.pessoa_id, new.oportunidade_id, 'op:' || new.oportunidade_id,
-        p_base => v_hoje, p_descricao => 'Compareceu à avaliação', p_substituir => true);
-    end if;
+    -- Passou pela consulta (onde recebe o orçamento): regra "Saiu da consulta sem fechar".
+    perform public.avancar_para_marco(new.oportunidade_id, 'avaliacao_realizada', 'Compareceu à consulta');
+    perform public.criar_por_regra('pos_consulta', new.pessoa_id, new.oportunidade_id, 'op:' || new.oportunidade_id,
+      p_base => v_hoje, p_descricao => 'Passou pela consulta', p_substituir => true);
   end if;
   return null;
 end;
@@ -776,9 +779,12 @@ begin
   if new.status <> 'apresentado' or (tg_op = 'UPDATE' and old.status = 'apresentado') then
     return null;
   end if;
-  perform public.avancar_para_marco(new.oportunidade_id, 'orcamento_apresentado', 'Orçamento apresentado');
-  perform public.criar_por_regra('orcamento_apresentado', new.pessoa_id, new.oportunidade_id, 'op:' || new.oportunidade_id,
-    p_base => coalesce(new.apresentado_em, public.hoje_clinica(new.clinica_id)), p_substituir => true);
+  -- O orçamento é apresentado na consulta: a negociação fica em "Consulta realizada".
+  perform public.avancar_para_marco(new.oportunidade_id, 'avaliacao_realizada', 'Orçamento apresentado na consulta');
+  if not public.tem_proxima_acao(new.oportunidade_id) then
+    perform public.criar_por_regra('pos_consulta', new.pessoa_id, new.oportunidade_id, 'op:' || new.oportunidade_id,
+      p_base => coalesce(new.apresentado_em, public.hoje_clinica(new.clinica_id)), p_descricao => 'Recebeu o orçamento na consulta');
+  end if;
   return null;
 end;
 $$;
@@ -1069,9 +1075,11 @@ begin
       select id into v_prox from public.tarefas where chave_dedupe = 'ag:' || v_ag and status = 'pendente';
 
     when 'vai_pensar' then
-      -- Começa a sequência de acompanhamento (espaçada e sem pressão).
-      perform public.avancar_para_marco(v_op.id, 'em_negociacao', 'Ficou de pensar');
-      v_prox := public.criar_por_regra('pensando', t.pessoa_id, v_op.id, 'op:' || v_op.id,
+      -- Depois da consulta: sequência "Saiu da consulta sem fechar" (espaçada e sem pressão).
+      -- Antes da consulta: continua a conversa para levar à avaliação.
+      v_prox := public.criar_por_regra(
+                  case when v_marco = 'avaliacao_realizada' then 'pos_consulta' else 'em_contato' end,
+                  t.pessoa_id, v_op.id, 'op:' || v_op.id,
                   p_vence => p_data, p_descricao => 'Ficou de pensar', p_substituir => true);
 
     when 'pediu_retorno' then

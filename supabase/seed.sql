@@ -33,7 +33,7 @@ begin
   values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas/lentes em resina'),
           (public.etapa_por_marco(c, 'novo_contato')).id);
 
-  -- 2. Maria: orçamento de facetas apresentado há 7 dias → follow-up (importante)
+  -- 2. Maria: recebeu o orçamento de facetas na consulta há 7 dias → contato hoje (importante)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, email, origem_id, temperatura, primeiro_contato_em)
   values (c, 'Maria Silva', '+5511900000001', 'maria.silva@exemplo.com',
           (select id from public.origens where clinica_id = c and nome = 'Indicação de paciente'), 'morna', hoje - 20)
@@ -46,6 +46,8 @@ begin
                                  condicao_pagamento, entrada_centavos, quantidade_parcelas, forma_pagamento_id,
                                  apresentado_em, valido_ate, apresentado_por)
   values (c, p, o, 'apresentado', 1400000, 'parcelado', 200000, 10, credito, hoje - 7, hoje + 23, prof);
+  -- Consulta há 7 dias: o contato da regra "Saiu da consulta sem fechar" é hoje.
+  update public.tarefas set vence_em = hoje where pessoa_id = p and status = 'pendente';
 
   -- 3. João: lead com quem a conversa começou; a tarefa ficou atrasada 2 dias
   insert into public.pessoas (clinica_id, nome, telefone_e164, whatsapp_e164, origem_id, primeiro_contato_em)
@@ -87,19 +89,19 @@ begin
   values (c, p, o, prof, 'avaliacao', (public.proximo_dia_util(c, hoje + 1) + time '14:30') at time zone 'America/Sao_Paulo');
   update public.tarefas set vence_em = hoje where pessoa_id = p and status = 'pendente';
 
-  -- 6. Luiza: ficou de pensar → follow-up em 2 dias (próximos dias)
+  -- 6. Luiza: passou pela consulta e ficou de pensar → contato em 2 dias (próximos dias)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em)
   values (c, 'Luiza Prado', '+5511900000008',
           (select id from public.origens where clinica_id = c and nome = 'Instagram'), hoje - 30)
   returning id into p;
   insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id, valor_estimado_centavos)
   values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas de porcelana'),
-          (public.etapa_por_marco(c, 'em_negociacao')).id, 2200000)
+          (public.etapa_por_marco(c, 'avaliacao_realizada')).id, 2200000)
   returning id into o;
-  perform public.definir_proxima_acao(o, 'acompanhar_decisao', 'Acompanhar a decisão de Luiza',
-                                      hoje + 2, 'normal', 'pensando', 1, 'Ficou de pensar');
+  perform public.definir_proxima_acao(o, 'acompanhar_decisao', 'Retomar com Luiza depois da consulta',
+                                      hoje + 2, 'alta', 'pos_consulta', 1, 'Ficou de pensar');
 
-  -- 7. Marcos: follow-up de orçamento que deveria ter sido feito há 3 dias (atrasada)
+  -- 7. Marcos: contato pós-consulta que deveria ter sido feito há 3 dias (atrasada)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em)
   values (c, 'Marcos Tavares', '+5511900000009',
           (select id from public.origens where clinica_id = c and nome = 'Indicação de profissional'), hoje - 25)
@@ -145,7 +147,7 @@ begin
   returning id into p;
   insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id)
   values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas/lentes em resina'),
-          (public.etapa_por_marco(c, 'em_negociacao')).id)
+          (public.etapa_por_marco(c, 'avaliacao_realizada')).id)
   returning id into o;
   insert into public.orcamentos (clinica_id, pessoa_id, oportunidade_id, status, valor_total_centavos, desconto_centavos,
                                  condicao_pagamento, entrada_centavos, quantidade_parcelas, forma_pagamento_id, apresentado_em)
@@ -183,7 +185,7 @@ begin
   returning id into p;
   insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id, valor_estimado_centavos)
   values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Implantes'),
-          (public.etapa_por_marco(c, 'em_negociacao')).id, 900000)
+          (public.etapa_por_marco(c, 'avaliacao_realizada')).id, 900000)
   returning id into o;
   perform public.mover_etapa(o, public.etapa_por_resultado(c, 'sem_resposta'), 'Parou de responder após o orçamento');
   update public.tarefas set vence_em = hoje + 12 where oportunidade_id = o and status = 'pendente';
@@ -195,7 +197,7 @@ begin
   returning id into p;
   insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id, valor_estimado_centavos)
   values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas de porcelana'),
-          (public.etapa_por_marco(c, 'orcamento_apresentado')).id, 2400000)
+          (public.etapa_por_marco(c, 'avaliacao_realizada')).id, 2400000)
   returning id into o;
   update public.oportunidades set reabre_em = hoje + 25 where id = o;
   perform public.mover_etapa(o, public.etapa_por_resultado(c, 'nao_fechou'), 'Achou o investimento alto neste momento',

@@ -265,8 +265,14 @@ export function motivoDoContato(t: TarefaAberta, hoje: DataCivil): string {
       return `${parcela} · vencimento ${ddmm(venc)}`;
     }
     case "acompanhar_decisao": {
-      const base = t.descricao ?? "Está pensando";
-      return t.orcamento_valor_centavos ? `${base} — orçamento de ${formatarMoeda(t.orcamento_valor_centavos)}` : base;
+      // Depois da consulta (onde o orçamento é apresentado): a pessoa está decidindo.
+      const pensando = t.descricao === "Ficou de pensar" ? " — ficou de pensar" : "";
+      if (t.orcamento_apresentado_em) {
+        const valor = t.orcamento_valor_centavos ? ` de ${formatarMoeda(t.orcamento_valor_centavos)}` : "";
+        return `Recebeu o orçamento${valor} na consulta ${haQuantoTempo(t.orcamento_apresentado_em, hoje)}${pensando}`;
+      }
+      const orcamento = t.orcamento_valor_centavos ? ` (orçamento de ${formatarMoeda(t.orcamento_valor_centavos)})` : "";
+      return `${t.descricao && !pensando ? t.descricao : "Passou pela consulta e está decidindo"}${orcamento}${pensando}`;
     }
     case "agendar_tratamento":
       return "Fechou o tratamento";
@@ -307,7 +313,7 @@ export function acaoRecomendada(t: TarefaAberta, hoje: DataCivil): string {
     case "acompanhar_decisao":
       if (t.passo >= 3) return "Último contato da sequência: deixar a porta aberta, com gentileza.";
       if (t.passo === 2) return "Oferecer uma conversa com a doutora para esclarecer dúvidas, sem pressa.";
-      return "Acompanhar com leveza: perguntar se ficou alguma dúvida, sem pressionar.";
+      return "Perguntar como ficou depois da consulta e se restou alguma dúvida sobre o plano, sem pressionar.";
     case "recuperar_desmarcacao":
       return "Entrar em contato para entender se deseja remarcar.";
     case "recuperar_falta":

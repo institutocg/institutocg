@@ -337,8 +337,8 @@ create table public.regras_followup (
   id                      uuid primary key default gen_random_uuid(),
   clinica_id              uuid not null references public.clinicas (id),
   situacao                text not null check (situacao in (
-                            'novo_contato', 'em_contato', 'confirmacao', 'compareceu', 'orcamento_apresentado',
-                            'pensando', 'desmarcou', 'faltou', 'sem_resposta', 'nao_fechou', 'fechou',
+                            'novo_contato', 'em_contato', 'confirmacao', 'pos_consulta', 'desmarcou',
+                            'sem_resposta', 'nao_fechou', 'fechou',
                             'reativacao', 'paciente_inativo', 'manutencao', 'pos_tratamento')),
   nome                    text not null,
   quando                  text not null,            -- explicação do gatilho, para a tela

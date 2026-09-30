@@ -95,7 +95,7 @@ select testes.guardar('secretaria', (select id from auth.users where email = 'se
 select testes.ok((select count(*) from public.usuarios) = 4,
   'perfil de usuário é criado automaticamente a cada login novo');
 select testes.ok((select count(*) from public.procedimentos where clinica_id = testes.v('c1')) = 8
-             and (select count(*) from public.etapas_funil where clinica_id = testes.v('c1')) = 12
+             and (select count(*) from public.etapas_funil where clinica_id = testes.v('c1')) = 10
              and (select count(*) from public.formas_pagamento where clinica_id = testes.v('c1')) = 6,
   'clínica nasce com procedimentos, etapas do funil e formas de pagamento padrão');
 
@@ -300,7 +300,7 @@ select testes.ok((select status = 'cancelada' from public.tarefas where titulo =
 with novo as (
   insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id, oportunidade_origem_id)
   values (testes.v('c1'), testes.v('maria'), testes.cat('procedimentos', testes.v('c1'), 'Facetas/lentes em resina'),
-          testes.cat('etapas_funil', testes.v('c1'), 'Orçamento apresentado'), testes.v('op_maria'))
+          testes.cat('etapas_funil', testes.v('c1'), 'Consulta realizada'), testes.v('op_maria'))
   returning id
 ) select testes.guardar('op_maria2', id) from novo;
 select testes.ok((select count(*) from public.oportunidades where pessoa_id = testes.v('maria')) = 2,

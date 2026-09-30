@@ -19,7 +19,7 @@ test("secretária consulta as regras, mas não altera", async ({ page }) => {
   await menu(page).getByRole("link", { name: "Configurações" }).click();
   await expect(page.getByRole("heading", { name: "Configurações", level: 1 })).toBeVisible();
   await expect(page.getByText("Somente a administradora altera as regras.")).toBeVisible();
-  await expect(regra(page, "Paciente desmarcou")).toContainText(
+  await expect(regra(page, "Desmarcou ou faltou")).toContainText(
     "Ação no dia seguinte; sem resposta, mais 2 tentativas (após 3 e 4 dias). Depois disso, vai para “Sem resposta”.",
   );
   await expect(regra(page, "Parou de responder")).toContainText("vai para “Reativação”, com novo contato em 60 dias");
@@ -29,7 +29,7 @@ test("secretária consulta as regras, mas não altera", async ({ page }) => {
 test("administradora edita uma regra e a mensagem sugerida", async ({ page }) => {
   await entrar(page, "dona@institutocg.local");
   await page.goto("/configuracoes");
-  await regra(page, "Paciente desmarcou").getByRole("button", { name: "Editar regra Paciente desmarcou" }).click();
+  await regra(page, "Desmarcou ou faltou").getByRole("button", { name: "Editar regra Desmarcou ou faltou" }).click();
   const j = page.getByRole("dialog");
   await j.getByLabel("Quando (dias depois)").fill("2");
   await j.getByLabel("Se não responder, tentar de novo após (dias)").fill("3, 4, 5, 6, 7, 8");
@@ -43,7 +43,7 @@ test("administradora edita uma regra e a mensagem sugerida", async ({ page }) =>
   await j.getByRole("button", { name: "Salvar regra" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Regra salva." })).toBeVisible();
 
-  const card = regra(page, "Paciente desmarcou");
+  const card = regra(page, "Desmarcou ou faltou");
   await expect(card).toContainText("Ação em 2 dias; sem resposta, mais 1 tentativa (após 5 dias).");
   await card.getByText("Ver mensagem sugerida").click();
   await expect(card).toContainText("Oi, Maria! Vamos encontrar um novo horário para você?");
@@ -52,16 +52,16 @@ test("administradora edita uma regra e a mensagem sugerida", async ({ page }) =>
   await page.goto("/funil");
   await page.getByRole("button", { name: "Mover Rafael Gomes" }).click();
   await page.getByRole("dialog").getByLabel("Etapa").selectOption({ label: "Desmarcou" });
-  await expect(page.getByRole("dialog").getByText(/Regra “Paciente desmarcou”: ação em 2 dias/)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(/Regra “Desmarcou ou faltou”: ação em 2 dias/)).toBeVisible();
 });
 
 test("administradora desliga uma regra", async ({ page }) => {
   await entrar(page, "dona@institutocg.local");
   await page.goto("/configuracoes");
-  await regra(page, "Compareceu à avaliação").getByRole("button", { name: /Editar regra/ }).click();
+  await regra(page, "Saiu da consulta sem fechar").getByRole("button", { name: /Editar regra/ }).click();
   await page.getByRole("dialog").getByLabel("Regra ligada (criar a tarefa automaticamente)").uncheck();
   await page.getByRole("dialog").getByRole("button", { name: "Salvar regra" }).click();
-  await expect(regra(page, "Compareceu à avaliação")).toContainText("Desligada: nenhuma tarefa automática nesta situação.");
+  await expect(regra(page, "Saiu da consulta sem fechar")).toContainText("Desligada: nenhuma tarefa automática nesta situação.");
 });
 
 test("campanha de reativação: prévia, lista editável e contatos distribuídos", async ({ page }) => {

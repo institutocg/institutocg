@@ -122,26 +122,29 @@ select testes.ok((select t.titulo = 'Ana compareceu?' from testes.pendente(teste
 select testes.entrar('sec@motor.local'); set role authenticated;
 
 update public.agendamentos set status = 'compareceu' where pessoa_id = testes.v('ana');
-select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Compareceu'
-             and (select tipo = 'apresentar_orcamento' from testes.pendente(testes.v('ana'))),
-  'compareceu: funil vai para "Compareceu" e pede o registro do orçamento');
+select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Consulta realizada'
+             and (select t.tipo = 'acompanhar_decisao' and t.regra = 'pos_consulta' and t.vence_em = testes.util(3)
+                     and t.titulo = 'Retomar com Ana depois da consulta'
+                     and t.mensagem_sugerida like 'Olá, Ana!%prazer receber você na consulta%'
+                  from testes.pendente(testes.v('ana')) t),
+  'compareceu: funil vai para "Consulta realizada" e o contato pós-consulta fica para 3 dias depois');
 
 insert into public.orcamentos (clinica_id, pessoa_id, oportunidade_id, status, valor_total_centavos, apresentado_em)
 values (testes.v('m'), testes.v('ana'), testes.v('op_ana'), 'apresentado', 1500000, testes.hoje());
-select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Orçamento apresentado'
-             and (select t.tipo = 'follow_up_orcamento' and t.passo = 1 and t.vence_em = testes.util(3)
-                  from testes.pendente(testes.v('ana')) t)
+select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Consulta realizada'
+             and (select vence_em = testes.util(3) from testes.pendente(testes.v('ana')))
              and testes.pendentes(testes.v('ana')) = 1,
-  'orçamento apresentado: follow-up leve em 3 dias (e a tarefa de registrar orçamento sai da lista)');
+  'orçamento registrado (apresentado na consulta): continua o mesmo contato, sem tarefa duplicada');
 
-select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'vai_pensar');
-select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Negociação / pensando'
-             and (select tipo = 'acompanhar_decisao' and vence_em = testes.util(4) from testes.pendente(testes.v('ana'))),
-  'vai pensar: funil "Negociação / pensando" e acompanhamento sem pressão em 4 dias');
-select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'feito');
-select testes.ok((select tipo = 'acompanhar_decisao' and passo = 2 and vence_em = testes.util(6)
+select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
+select testes.ok((select tipo = 'acompanhar_decisao' and passo = 2 and vence_em = testes.util(4)
                   from testes.pendente(testes.v('ana'))),
-  'sequência de acompanhamento: 2º contato 6 dias depois (intervalos da regra)');
+  'saiu da consulta sem fechar: sem resposta, nova tentativa 4 dias depois (intervalos da regra)');
+select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'vai_pensar');
+select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Consulta realizada'
+             and (select tipo = 'acompanhar_decisao' and passo = 1 and vence_em = testes.util(3) and descricao = 'Ficou de pensar'
+                  from testes.pendente(testes.v('ana'))),
+  'vai pensar: recomeça o acompanhamento sem pressão, na mesma etapa');
 
 select testes.erro(format($$select public.registrar_acao(%L, 'nao_fechou')$$, (testes.pendente(testes.v('ana'))).id),
   'motivo', '"não fechou" exige motivo');
@@ -226,7 +229,7 @@ select testes.ok((select t.tipo = 'follow_up' and t.titulo = 'Conversar com Eva 
 -- =============================================================================
 
 select testes.guardar('fabi', testes.nova_pessoa('Fabi Fecha', '+5511910000006'));
-select testes.guardar('op_fabi', testes.nova_op(testes.v('fabi'), 'em_negociacao'));
+select testes.guardar('op_fabi', testes.nova_op(testes.v('fabi'), 'avaliacao_realizada'));
 select public.registrar_acao((testes.pendente(testes.v('fabi'))).id, 'fechou');
 select testes.ok((select status = 'ganha' from public.oportunidades where id = testes.v('op_fabi'))
              and (select tipo = 'agendar_tratamento' from testes.pendente(testes.v('fabi'))),
