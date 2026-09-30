@@ -13,30 +13,35 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260929120400_motor_de_acoes.sql` | **Motor de ações**: calendário (dias úteis e feriados), cadências, gatilhos que criam tarefas, `registrar_acao()`, `marcar_parcela_paga()`, rotina diária `preparar_dia()` e a visão `v_tarefas_abertas` usada pelo painel |
 | `20260930120000_funil.sql` | `mover_etapa_manual()` (mudança de etapa com a ação confirmada/editada pela usuária, agendamento, fechamento com parcelas) e proteção das funções internas do motor |
 | `20260929120500_resgate.sql` | `criar_resgate()` (tarefa de manutenção/reativação sob demanda para paciente antigo) e `sem_acento()` para a busca |
+| `20260930130000_tratamento_e_campanhas.sql` | Fechou → "em tratamento"; `concluir_tratamento()` (agenda o convite de retorno); campanhas de reativação (`prever_campanha`, `criar_campanha`, `encerrar_campanha`, visão `v_campanhas`) |
 
-## Motor de ações — quando o sistema cria tarefas sozinho
+## Motor de ações — regras de follow-up configuráveis
 
-| Situação | Ação criada |
+Cada situação comercial tem uma linha em `regras_followup` (editável em **Configurações**, só pela administradora). A regra responde às quatro perguntas: **o que aconteceu** (situação), **o que fazer** (tarefa e prioridade), **quando** (prazo e novas tentativas) e **com qual mensagem** (`modelos_mensagem`). Tudo é disparado por eventos e datas — ninguém precisa criar tarefas à mão.
+
+| Situação (regra) | Padrão |
 |---|---|
-| Novo contato cadastrado | Primeiro contato, hoje, urgente (cadência 0 → 1 → 3 dias) |
-| Paciente antigo com interesse | "Conversar com X sobre Y", hoje |
-| Agendamento criado | Confirmação na véspera útil; funil vai para "Avaliação agendada" |
-| Confirmação sem resposta | Nova tentativa no dia da consulta |
-| Consulta passou sem registro | "X compareceu?" (rotina diária) |
-| Desmarcou / faltou | Cartão vai para "Desmarcou"; recuperação urgente, hoje (cadência 0 → 3 → 7 / 0 → 2 → 5 dias) |
-| Compareceu à avaliação | "Registrar o orçamento"; funil "Avaliação realizada" |
-| Orçamento apresentado | Follow-up leve em 3 dias (cadência 3 → 7 → 14 dias) |
-| Vai pensar | Etapa "Negociação / pensando" e acompanhamento sem pressão (4 → 10 → 20 dias) |
-| Pediu retorno / respondeu | Na data combinada / amanhã |
-| Não fechou | Retomar no prazo do motivo (ex.: valor alto = 30 dias); na data, a pessoa aparece na coluna "Reativação" |
-| Desistiu | Reativação no prazo do motivo |
-| Sem resposta | Tentativas leves e espaçadas (7 → 21 → 45 dias) e depois decisão humana |
-| Fechou | "Agendar o início do tratamento" |
-| Parcela em aberto | Lembrete na data prevista; em atraso aparece como urgente |
-| Paciente antigo inativo / manutenção devida | Nova negociação na coluna "Reativação" (somente com a reativação ligada; limite diário; intervalo mínimo desde o último contato) |
-| Não quer mais contato | Nenhuma tarefa, nunca (exceto lembretes financeiros) |
+| Novo lead | Primeiro contato hoje, urgente; sem resposta: +1 e +2 dias; depois → "Sem resposta" |
+| Demonstrou interesse | Conduzir para a avaliação no dia seguinte; +3 e +4 dias; depois → "Sem resposta" |
+| Confirmar consulta | 1 dia útil antes; sem resposta, nova tentativa no dia da consulta |
+| Compareceu à avaliação | Registrar o orçamento, no mesmo dia |
+| Orçamento enviado | Follow-up em 3 dias; +4 e +7 dias; depois → "Sem resposta" |
+| Paciente está pensando | Acompanhar em 4 dias; +6 e +10 dias; depois → "Sem resposta" |
+| Paciente desmarcou | **"Entrar em contato com X para remarcar" no dia seguinte** (desmarcou dia 10 → tarefa dia 11), urgente; +3 e +4 dias |
+| Paciente faltou | Contato no dia seguinte; +2 e +3 dias |
+| Parou de responder | Nova tentativa em 7 dias; +14 dias; depois → "Reativação", com contato leve em 60 dias |
+| Não fechou | Retomada no prazo do motivo (ex.: valor alto = 30 dias; "parou de responder" = 90) |
+| Fechou | Agendar o início do tratamento; a pessoa sai do funil de vendas e fica "em tratamento" |
+| Reativação | Contato no dia; +21 dias; depois a usuária decide |
+| Pacientes antigos sem atendimento | X meses sem atendimento (padrão 6) — **desligada** durante o recadastramento |
+| Manutenção devida | Ciclo de retorno do procedimento — **desligada** durante o recadastramento |
+| Retorno após o tratamento | Convite para revisão 6 meses após `concluir_tratamento()` |
 
-Mudanças de etapa feitas no funil usam a mesma sugestão (`sugerir_acao()`), mas a usuária confirma, edita (título, data, mensagem) ou recusa antes de salvar. Nenhuma cadência se estende para sempre: a última tentativa vira "Decidir o próximo passo". Datas caem sempre em dia útil (seg–sex, sem feriados).
+**Ao registrar o contato**, a usuária escolhe o resultado e ele define o próximo passo: *remarcou* (novo agendamento + confirmação), *pediu para falar depois* (tarefa na data combinada), *não respondeu* (próxima tentativa da regra; esgotadas, o que a regra mandar: "Sem resposta", "Reativação", encerrar como "Não fechou — parou de responder" ou pedir decisão), *não tem interesse* (encerra como "Desistiu — sem interesse no momento", com retomada leve em 180 dias) ou *outro* (descrição obrigatória, data opcional). Sem registro, a tarefa continua pendente (e aparece como atrasada).
+
+**Garantias:** negociação aberta nunca fica sem próxima ação (a rotina diária cria "Definir o próximo passo", mesmo com a regra desligada); datas sempre em dia útil; reativações respeitam limite por dia e intervalo mínimo desde o último contato; quem pediu para não ser contatado nunca recebe tarefa; **nenhuma mensagem é enviada automaticamente** — o CRM só sugere.
+
+**Campanhas:** a administradora escolhe o público (sem atendimento há X meses, quem fez um procedimento há X meses, quem não fechou há X meses), revisa a lista, escreve a mensagem e o sistema distribui os contatos em dias úteis com limite diário. Ficam de fora: quem não aceita contato (ou marketing, se marcado), quem está negociando, quem participou de campanha nos últimos 30 dias e quem está com pagamento em atraso.
 
 ## Onde está cada requisito
 
@@ -70,7 +75,7 @@ Mudanças de etapa feitas no funil usam a mesma sugestão (`sugerir_acao()`), ma
 npm run test:db    # sobe um PostgreSQL temporário, aplica as migrações, o seed e os testes
 ```
 
-Os testes (`tests/10_integridade.sql` e `tests/15_motor_de_acoes.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
+Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql` e `18_regras_e_campanhas.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
 
 ## Implantação no Supabase (quando formos para produção)
 

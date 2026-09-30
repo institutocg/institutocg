@@ -40,6 +40,8 @@ export interface TarefaAberta {
   prioridade: Prioridade;
   passo: number;
   regra: string | null;
+  /** Nome da regra de follow-up que criou a tarefa (Configurações). */
+  regra_nome?: string | null;
   mensagem_sugerida: string | null;
   pessoa_nome: string;
   whatsapp_e164: string | null;
@@ -68,8 +70,12 @@ export type Botao =
   | "ver_negociacao"
   | "marcar_pago";
 
-/** Qual conjunto de resultados o diálogo "Registrar contato" oferece. */
-export type TipoRegistro = "venda" | "agendamento" | "pagamento";
+/**
+ * Qual conjunto de resultados o diálogo "Registrar contato" oferece:
+ * venda (negociação), agendamento (confirmação), pagamento (lembrete),
+ * recuperacao (desmarcou/faltou/sem resposta) e reativacao (paciente antigo).
+ */
+export type TipoRegistro = "venda" | "agendamento" | "pagamento" | "recuperacao" | "reativacao";
 
 export interface Cartao {
   id: string;
@@ -95,6 +101,8 @@ export interface Cartao {
   valorCentavos: number | null;
   botoes: Botao[];
   registro: TipoRegistro;
+  /** "Criada pela regra …" (quando veio de uma regra de follow-up). */
+  regraNome: string | null;
 }
 
 export interface Painel {
@@ -138,7 +146,7 @@ export function classificar(t: TarefaAberta, hoje: DataCivil): Grupo {
     case "confirmar_pagamento":
       return atrasada ? "urgente" : "importante";
     case "follow_up":
-      if (t.regra === "R-RES-03") return "urgente"; // pediu retorno para hoje
+      if (t.regra === "pediu_retorno") return "urgente"; // pediu retorno para hoje
       return "importante";
     case "follow_up_orcamento":
     case "acompanhar_decisao":
@@ -269,14 +277,12 @@ export function motivoDoContato(t: TarefaAberta, hoje: DataCivil): string {
     case "follow_up":
       if (t.descricao) return t.descricao;
       switch (t.regra) {
-        case "R-RES-01":
-          return "Respondeu com interesse";
-        case "R-RES-02":
-          return "Ficou de pensar";
-        case "R-RES-03":
-          return "Pediu retorno";
-        case "R-LEAD-02":
+        case "em_contato":
           return "Demonstrou interesse";
+        case "pediu_retorno":
+          return "Pediu retorno";
+        case "clinica_cancelou":
+          return "A clínica cancelou o horário";
         default:
           return "Follow-up programado";
       }
@@ -317,9 +323,13 @@ export function acaoRecomendada(t: TarefaAberta, hoje: DataCivil): string {
     case "reabrir_sem_resposta":
       return "Enviar uma mensagem leve para retomar o contato.";
     case "reativacao":
-      return "Enviar mensagem de reativação convidando para uma visita.";
+      return t.regra === "campanha"
+        ? "Enviar a mensagem da campanha, com um convite pessoal."
+        : "Enviar mensagem de reativação convidando para uma visita.";
     case "manutencao":
-      return "Convidar para agendar a manutenção.";
+      return t.regra === "pos_tratamento"
+        ? "Convidar para a revisão após o tratamento."
+        : "Convidar para agendar a manutenção.";
     case "agendar_tratamento":
       return "Registrar as condições de pagamento e combinar a data de início.";
     case "apresentar_orcamento":
@@ -330,15 +340,13 @@ export function acaoRecomendada(t: TarefaAberta, hoje: DataCivil): string {
         : "Decidir: continuar acompanhando ou encerrar a negociação.";
     case "follow_up":
       switch (t.regra) {
-        case "R-RES-01":
+        case "em_contato":
           return "Conduzir para o agendamento da avaliação.";
-        case "R-RES-02":
-          return "Retomar a conversa e perguntar se ficou alguma dúvida.";
-        case "R-RES-03":
+        case "pediu_retorno":
           return t.vence_em > hoje ? "Retornar na data combinada." : "Retornar hoje, como combinado.";
-        case "R-RES-04":
+        case "numero_invalido":
           return "Buscar outro telefone (indicação, redes sociais, cadastro antigo).";
-        case "R-AG-04":
+        case "clinica_cancelou":
           return "Oferecer um novo horário.";
         default:
           return t.titulo;
@@ -380,10 +388,15 @@ export function montarCartao(t: TarefaAberta, hoje: DataCivil): Cartao {
   } else if (
     t.tipo === "recuperar_desmarcacao" ||
     t.tipo === "recuperar_falta" ||
+    t.tipo === "reabrir_sem_resposta" ||
     t.tipo === "definir_proxima_acao"
   ) {
     // Estas situações precisam do resultado da conversa, não de um simples "feito".
     botoes = ["abrir_paciente", "ver_mensagem", "registrar_contato"];
+    if (t.tipo !== "definir_proxima_acao") registro = "recuperacao";
+  } else if (t.tipo === "reativacao" || t.tipo === "manutencao") {
+    botoes = ["abrir_paciente", "ver_mensagem", "registrar_contato"];
+    registro = "reativacao";
   } else {
     botoes = ["abrir_paciente", "ver_mensagem", "registrar_contato", "concluir"];
   }
@@ -410,6 +423,7 @@ export function montarCartao(t: TarefaAberta, hoje: DataCivil): Cartao {
     valorCentavos: valor,
     botoes,
     registro,
+    regraNome: t.regra_nome ?? null,
   };
 }
 

@@ -55,12 +55,12 @@ describe("classificação por prioridade", () => {
     ["primeiro_contato", {}, "urgente"],
     ["recuperar_desmarcacao", {}, "urgente"],
     ["recuperar_falta", {}, "urgente"],
-    ["follow_up", { regra: "R-RES-03" }, "urgente"], // pediu retorno para hoje
+    ["follow_up", { regra: "pediu_retorno" }, "urgente"], // pediu retorno para hoje
     ["confirmar_pagamento", { vence_em: "2026-09-25" }, "urgente"], // pagamento atrasado
     ["confirmar_pagamento", {}, "importante"], // pagamento do dia
     ["follow_up_orcamento", {}, "importante"],
     ["acompanhar_decisao", {}, "importante"], // está pensando
-    ["follow_up", { regra: "R-RES-01" }, "importante"], // demonstrou interesse
+    ["follow_up", { regra: "em_contato" }, "importante"], // demonstrou interesse
     ["follow_up", {}, "importante"],
     ["retorno_por_motivo", {}, "importante"],
     ["reabrir_sem_resposta", {}, "importante"],
@@ -156,6 +156,25 @@ describe("textos do cartão", () => {
     expect(acaoRecomendada({ ...t, passo: 2 }, HOJE)).toBe("Tentar confirmar a presença novamente.");
   });
 
+  it("desmarcou e sem resposta: registro de recuperação, com o nome da regra", () => {
+    const t = tarefa({ tipo: "recuperar_desmarcacao", regra: "desmarcou", regra_nome: "Paciente desmarcou" });
+    const c = montarCartao(t, HOJE);
+    expect(c.registro).toBe("recuperacao");
+    expect(c.regraNome).toBe("Paciente desmarcou");
+    expect(c.botoes).not.toContain("concluir");
+    expect(montarCartao(tarefa({ tipo: "reabrir_sem_resposta" }), HOJE).registro).toBe("recuperacao");
+  });
+
+  it("reativação, campanha e retorno após o tratamento", () => {
+    expect(montarCartao(tarefa({ tipo: "reativacao" }), HOJE).registro).toBe("reativacao");
+    expect(acaoRecomendada(tarefa({ tipo: "reativacao", regra: "campanha" }), HOJE)).toBe(
+      "Enviar a mensagem da campanha, com um convite pessoal.",
+    );
+    expect(acaoRecomendada(tarefa({ tipo: "manutencao", regra: "pos_tratamento" }), HOJE)).toBe(
+      "Convidar para a revisão após o tratamento.",
+    );
+  });
+
   it("cobre todos os tipos com um motivo e uma ação", () => {
     const tipos: TipoTarefa[] = [
       "primeiro_contato", "follow_up", "follow_up_orcamento", "confirmar_agendamento",
@@ -171,7 +190,7 @@ describe("textos do cartão", () => {
   });
 
   it("retorno combinado: hoje × data futura", () => {
-    const t = tarefa({ tipo: "follow_up", regra: "R-RES-03" });
+    const t = tarefa({ tipo: "follow_up", regra: "pediu_retorno" });
     expect(acaoRecomendada(t, HOJE)).toBe("Retornar hoje, como combinado.");
     expect(acaoRecomendada({ ...t, vence_em: "2026-10-05" }, HOJE)).toBe("Retornar na data combinada.");
   });

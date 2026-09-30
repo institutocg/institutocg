@@ -978,9 +978,9 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 | Avaliação agendada | Data e horário → confirmação na véspera; sem data → "combinar a data" |
 | Compareceu | Registrar o orçamento (hoje) |
 | Orçamento apresentado | Follow-up leve em 3 dias (+ valor do orçamento, opcional) |
-| Negociação / pensando | Sequência sem pressão: 4, 10 e 20 dias |
-| Desmarcou | Recuperação hoje (o agendamento é marcado como desmarcado) |
-| Sem resposta | Nova tentativa em 7 dias; no máximo 3 (7, 21, 45 dias) |
+| Negociação / pensando | Sequência sem pressão: 4 dias, depois +6 e +10 (regra editável) |
+| Desmarcou | "Entrar em contato para remarcar" no dia seguinte (o agendamento é marcado como desmarcado) |
+| Sem resposta | Nova tentativa em 7 dias e mais uma após 14; depois vai para "Reativação" (contato em 60 dias) |
 | Reativação | Reaproximação (negociação nova ligada à anterior) |
 | Fechou | Agendar o início + **registro financeiro** (valor, desconto, entrada, parcelas, forma) → parcelas e lembretes de pagamento |
 | Não fechou | Motivo obrigatório; retomada no prazo do motivo (editável) ou nenhuma |
@@ -988,6 +988,20 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 **Sem excesso de contato:** cadências curtas que terminam numa decisão humana; a resposta do paciente interrompe a sequência; contatos de reativação respeitam intervalo mínimo desde o último contato; uma única ação pendente por negociação.
 
 **Toda ação automática é editável:** no painel e na ficha, "Editar ação" (título, data, horário, mensagem) ou "Não fazer esta ação" (com motivo). Lembretes de pagamento seguem o vencimento e saem ao registrar o pagamento.
+
+## 14.5 Follow-up inteligente e regras configuráveis (implementado)
+
+**Regra principal: nenhum lead fica esquecido.** Cada situação comercial tem uma regra (`regras_followup`) que diz o que aconteceu, o que fazer, quando e com qual mensagem. A tela **Configurações** mostra cada regra em linguagem simples ("Ação no dia seguinte; sem resposta, mais 2 tentativas (após 3 e 4 dias). Depois disso, vai para “Sem resposta”.") e a administradora altera: ligar/desligar, título da tarefa, prazo, novas tentativas (máx. 5), prioridade, o que fazer se continuar sem resposta, período (meses) e o texto da mensagem sugerida. A secretária consulta, mas não altera. Limites gerais: reativações por dia e intervalo mínimo entre contatos.
+
+**Exemplos pedidos:** novo lead → primeiro contato hoje; orçamento enviado → follow-up em 3 dias; pensando → acompanhamento em 4 dias; parou de responder → nova tentativa e, sem resposta, etapa "Reativação"; **desmarcou em 10/10 → tarefa "Entrar em contato com X para remarcar" em 11/10**; não fechou → motivo registrado e retomada futura; fechou → sai do funil de vendas e fica "em tratamento" (botão **Concluir tratamento** na ficha agenda o convite de revisão em 6 meses); paciente antigo → campanhas de reativação.
+
+**Registrar contato** (desmarcou, faltou, sem resposta): *Remarcou · Pediu para falar depois · Não respondeu · Não tem interesse · Outro*. Reativações também têm *Respondeu com interesse* e *Não quer mais contato*. O cartão mostra "Criada pela regra …".
+
+**Campanhas** (menu Campanhas, criadas pela administradora): público (sem atendimento há X meses / quem fez um procedimento / quem não fechou), prévia da lista com opção de tirar nomes, mensagem com prévia, limite por dia e data de início. Os contatos entram na coluna "Reativação" e no painel na data programada; a lista mostra contatadas, responderam, agendaram e fecharam, e é possível encerrar a campanha.
+
+**Nada é enviado automaticamente pelo WhatsApp:** o CRM sugere a ação e a mensagem; a usuária decide quando enviar.
+
+**Sugestões de marketing aplicadas:** contato no dia seguinte à desmarcação (ainda "quente", sem parecer cobrança no mesmo dia); tentativas espaçadas e com limite; quem está com pagamento em atraso não entra em campanha; campanhas em lotes pequenos por dia; mensagens personalizadas com nome e tratamento; filtro por consentimento de comunicações (LGPD).
 
 ## 15. Decisões pendentes
 

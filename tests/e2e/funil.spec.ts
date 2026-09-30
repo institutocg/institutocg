@@ -90,23 +90,24 @@ test("recusar a ação automática deixa o cartão sinalizado", async ({ page })
   await entrar(page);
   await page.goto("/funil");
   await mover(page, "João Lima", "Negociação / pensando");
-  await expect(janela(page).getByText(/contatos espaçados \(4, 10, 20 dias\)/)).toBeVisible();
+  await expect(janela(page).getByText(/Regra “Paciente está pensando”: ação em 4 dias; sem resposta, mais 2 tentativas \(após 6, 10 dias\)/)).toBeVisible();
   await janela(page).getByLabel("Criar a próxima ação").uncheck();
   await janela(page).getByRole("button", { name: "Mover" }).click();
   await expect(page.getByRole("status").filter({ hasText: "João foi para" })).toContainText("Nenhuma ação programada.");
   await expect(coluna(page, "Negociação / pensando").getByRole("article", { name: "João Lima" }).getByText("Sem próxima ação")).toBeVisible();
 });
 
-test("desmarcou: recuperação no mesmo dia aparece no painel", async ({ page }) => {
+test("desmarcou: contato para remarcar no dia seguinte", async ({ page }) => {
   await entrar(page);
   await page.goto("/funil");
   await mover(page, "Rafael Gomes", "Desmarcou");
-  await expect(janela(page).getByLabel("O que fazer")).toHaveValue("Falar com Rafael, que desmarcou");
+  await expect(janela(page).getByLabel("O que fazer")).toHaveValue("Entrar em contato com Rafael para remarcar");
+  await expect(janela(page).getByText(/Regra “Paciente desmarcou”: ação no dia seguinte/)).toBeVisible();
   await janela(page).getByRole("button", { name: "Mover" }).click();
   await expect(coluna(page, "Desmarcou").getByRole("article", { name: "Rafael Gomes" })).toBeVisible();
   await page.goto("/hoje");
-  await expect(page.getByRole("region", { name: "Urgente" }).getByRole("article", { name: "Rafael Gomes" })).toContainText(
-    "Entrar em contato para entender se deseja remarcar.",
+  await expect(page.getByRole("region", { name: "Próximos dias" }).getByRole("article", { name: "Rafael Gomes" })).toContainText(
+    "Entrar em contato com Rafael para remarcar",
   );
 });
 

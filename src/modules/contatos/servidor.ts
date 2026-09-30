@@ -207,6 +207,7 @@ export interface Contato {
   ultimo_atendimento_faixa: string | null;
   paciente_desde: string | null;
   em_tratamento: boolean;
+  retorno_previsto_em: string | null;
   consentimento_marketing: boolean;
   nao_contatar: boolean;
   nao_contatar_motivo: string | null;
@@ -280,13 +281,15 @@ export interface Ficha {
     }[];
   };
   resgatePendente: boolean;
+  /** Meses até o convite de retorno após o tratamento (null se a regra estiver desligada). */
+  mesesRetorno: number | null;
 }
 
 const COLUNAS_TAREFA = `
   id, pessoa_id, oportunidade_id, agendamento_id, parcela_id, tipo, titulo, descricao, vence_em, horario,
   prioridade, passo, regra, mensagem_sugerida, pessoa_nome, whatsapp_e164, telefone_e164, origem_nome,
   primeiro_contato_em, procedimento, etapa_marco, orcamento_apresentado_em, orcamento_valor_centavos,
-  agendamento_inicio, agendamento_tipo, parcela_numero, parcela_vencimento, parcela_saldo_centavos, parcela_total`;
+  agendamento_inicio, agendamento_tipo, parcela_numero, parcela_vencimento, parcela_saldo_centavos, parcela_total, regra_nome`;
 
 export async function carregarFicha(db: Db, sessao: Sessao, pessoaId: string): Promise<Ficha | null> {
   const contato = (await db.query<Contato>("select * from public.v_contatos where id = $1", [pessoaId])).rows[0];
@@ -404,6 +407,10 @@ export async function carregarFicha(db: Db, sessao: Sessao, pessoaId: string): P
     financeiro = { orcamentos: orcamentos.rows, vendas: vendas.rows, parcelas: parcelas.rows };
   }
 
+  const regraRetorno = await db.query<{ periodo_meses: number | null; ativa: boolean }>(
+    "select periodo_meses, ativa from public.regras_followup where clinica_id = $1 and situacao = 'pos_tratamento'",
+    [sessao.clinicaId],
+  );
   const p = proxima.rows[0];
   return {
     hoje,
@@ -419,6 +426,7 @@ export async function carregarFicha(db: Db, sessao: Sessao, pessoaId: string): P
     linha: linha.rows,
     financeiro,
     resgatePendente: (resgate.rowCount ?? 0) > 0,
+    mesesRetorno: regraRetorno.rows[0]?.ativa ? (regraRetorno.rows[0].periodo_meses ?? 6) : null,
   };
 }
 

@@ -113,6 +113,18 @@ select public.registrar_acao((testes.pend_r(testes.v('cris'))).id, 'nao_responde
 select testes.ok((select tipo = 'definir_proxima_acao' and descricao like '%2 tentativas%' from testes.pend_r(testes.v('cris'))),
   'regra com "decidir": depois das tentativas, a usuária decide o próximo passo');
 
+-- Proteção: regra "Sem resposta" apontando para a própria etapa não deixa ninguém esquecido.
+reset role; select testes.entrar('dona@regras.local'); set role authenticated;
+update public.regras_followup set intervalos = '{}', ao_esgotar = 'sem_resposta'
+ where clinica_id = testes.v('r') and situacao = 'sem_resposta';
+reset role; select testes.entrar('sec@regras.local'); set role authenticated;
+select testes.guardar('fe', testes.pessoa_r('Fernanda Sá', '+5511930000006'));
+select testes.guardar('op_fe', testes.op_r(testes.v('fe'), 'Em contato'));
+select public.mover_etapa_manual(testes.v('op_fe'), testes.etr('Sem resposta'), null, null, '{"criar": true}');
+select public.registrar_acao((testes.pend_r(testes.v('fe'))).id, 'nao_respondeu');
+select testes.ok((select tipo = 'definir_proxima_acao' from testes.pend_r(testes.v('fe'))),
+  'regra que apontaria para a própria etapa: a decisão volta para a usuária');
+
 \echo '— Regra desligada'
 reset role; select testes.entrar('dona@regras.local'); set role authenticated;
 update public.regras_followup set ativa = false where clinica_id = testes.v('r') and situacao = 'compareceu';
@@ -213,6 +225,17 @@ values (testes.v('r'), testes.v('g4'), testes.v('clar'), testes.hoje() - 400);
 select testes.ok((select array_agg(nome) from public.prever_campanha(testes.v('r'), 'procedimento', 12, testes.v('clar')))
                    = array['Joana Recente'],
   'segmento por procedimento: quem fez clareamento há mais de 12 meses');
+-- Pagamento em atraso: fica de fora da campanha.
+select testes.guardar('g6', testes.pessoa_r('Mário Devedor', '+5511930000016', 'paciente_antigo'));
+reset role;
+update public.pessoas set ultimo_atendimento_informado = testes.hoje() - 800 where id = testes.v('g6');
+with v as (
+  insert into public.vendas (clinica_id, pessoa_id, tipo, valor_total_centavos, condicao_pagamento, quantidade_parcelas, fechada_em)
+  values (testes.v('r'), testes.v('g6'), 'saldo_anterior', 50000, 'a_vista', 1, testes.hoje() - 60) returning id
+) select public.gerar_parcelas(id, testes.hoje() - 10) from v;
+select testes.entrar('dona@regras.local'); set role authenticated;
+select testes.ok(not exists (select 1 from public.prever_campanha(testes.v('r'), 'inativos', 12) where nome = 'Mário Devedor'),
+  'quem está com pagamento em atraso não entra em campanha');
 select testes.ok((select count(*) from public.prever_campanha(testes.v('r'), 'nao_fecharam', 1)) = 0,
   'segmento "não fecharam": ninguém encerrado há mais de 1 mês ainda');
 

@@ -125,7 +125,8 @@ create policy membro_ler on public.campanha_destinatarios for select to authenti
   using (clinica_id in (select public.minhas_clinicas()));
 
 -- Quem entra numa campanha. Só pessoas que aceitam contato, sem negociação em
--- andamento, sem outra campanha nos últimos 30 dias e sem contato recente.
+-- andamento, sem outra campanha nos últimos 30 dias, sem contato recente e sem
+-- pagamento em atraso.
 create or replace function public.prever_campanha(
   p_clinica            uuid,
   p_segmento           text,
@@ -209,6 +210,9 @@ begin
      and not exists (select 1 from public.oportunidades o where o.pessoa_id = p.id and o.status in ('aberta', 'pausada'))
      and not exists (select 1 from public.campanha_destinatarios d where d.pessoa_id = p.id
                       and d.criado_em > now() - interval '30 days')
+     -- Quem está com pagamento em atraso é tratado pelo financeiro, não por campanha.
+     and not exists (select 1 from public.parcelas pa where pa.pessoa_id = p.id
+                      and pa.status in ('pendente', 'parcial') and pa.vencimento < v_hoje)
    order by k.ref nulls first, k.nome;
 end;
 $$;

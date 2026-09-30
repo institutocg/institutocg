@@ -54,6 +54,7 @@ select
   b.ultimo_atendimento_faixa,
   b.paciente_desde,
   b.em_tratamento,
+  b.retorno_previsto_em,
   b.nao_contatar_motivo,
   b.criado_em,
   b.consentimento_contato,

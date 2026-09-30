@@ -746,7 +746,7 @@ begin
   elsif new.status = 'cancelado_clinica' then
     perform public.criar_tarefa_auto(
       new.pessoa_id, new.oportunidade_id, 'follow_up', 'agenda',
-      'Remarcar o horário de ' || v_nome, v_hoje, 'alta', 'em_contato', v_chave,
+      'Remarcar o horário de ' || v_nome, v_hoje, 'alta', 'clinica_cancelou', v_chave,
       p_agendamento => new.id, p_descricao => 'A clínica cancelou o horário');
 
   elsif new.status = 'compareceu' and new.tipo = 'avaliacao' and new.oportunidade_id is not null then
@@ -841,6 +841,7 @@ declare
   v_nova    uuid;
   v_sit     text;
   r         public.regras_followup;
+  v_esgotar text;
 begin
   select * into t from public.tarefas where id = p_tarefa for update;
   -- Roda com privilégios do sistema: confere se a tarefa é da clínica de quem chama.
@@ -1001,12 +1002,13 @@ begin
           end if;
         elsif v_op.id is not null and v_op.status in ('aberta', 'pausada') then
           -- Tentativas esgotadas: o que a regra manda fazer.
-          case coalesce(r.ao_esgotar, 'decidir')
+          -- Quem já está em "Sem resposta" não é movido para lá de novo: a usuária decide.
+          v_esgotar := case when r.ao_esgotar = 'sem_resposta' and v_op.status = 'pausada' then 'decidir'
+                            else coalesce(r.ao_esgotar, 'decidir') end;
+          case v_esgotar
             when 'sem_resposta' then
-              if v_op.status = 'aberta' then
-                perform public.mover_etapa(v_op.id, public.etapa_por_resultado(t.clinica_id, 'sem_resposta'),
-                  'Sem resposta depois de ' || t.passo || ' tentativas');
-              end if;
+              perform public.mover_etapa(v_op.id, public.etapa_por_resultado(t.clinica_id, 'sem_resposta'),
+                'Sem resposta depois de ' || t.passo || ' tentativas');
             when 'reativacao' then
               perform set_config('crm.acao_manual', 'on', true);
               perform public.mover_etapa(v_op.id, (public.etapa_por_marco(t.clinica_id, 'reativacao')).id,
@@ -1074,7 +1076,7 @@ begin
 
     when 'pediu_retorno' then
       v_prox := public.definir_proxima_acao(v_op.id, 'follow_up',
-                  'Retornar para ' || v_nome || ' (pediu retorno)', p_data, 'alta', 'em_contato');
+                  'Retornar para ' || v_nome || ' (pediu retorno)', p_data, 'alta', 'pediu_retorno');
 
     when 'fechou' then
       perform public.mover_etapa(v_op.id, public.etapa_por_resultado(t.clinica_id, 'fechou'), p_observacao);
@@ -1106,7 +1108,7 @@ begin
 
     when 'numero_invalido' then
       v_prox := public.criar_tarefa_auto(t.pessoa_id, v_op.id, 'follow_up', 'vendas',
-                  'Buscar outro telefone de ' || v_nome, v_hoje, 'alta', 'em_contato',
+                  'Buscar outro telefone de ' || v_nome, v_hoje, 'alta', 'numero_invalido',
                   coalesce('op:' || v_op.id, 'pessoa:' || t.pessoa_id),
                   p_descricao => 'O número cadastrado não funcionou');
 

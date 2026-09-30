@@ -57,7 +57,7 @@ begin
           (public.etapa_por_marco(c, 'em_contato')).id);
   update public.tarefas set vence_em = hoje - 2 where pessoa_id = p and status = 'pendente';
 
-  -- 4. Carla: avaliação amanhã, mas desmarcou → recuperação (urgente)
+  -- 4. Carla: avaliação amanhã, mas desmarcou ontem → hoje "Entrar em contato para remarcar" (urgente)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em)
   values (c, 'Carla Mendes', '+5511900000003',
           (select id from public.origens where clinica_id = c and nome = 'Site'), hoje - 15)
@@ -71,6 +71,8 @@ begin
   update public.agendamentos set status = 'desmarcado',
          motivo_id = (select id from public.motivos where clinica_id = c and nome = 'Trabalho')
    where pessoa_id = p;
+  -- Regra "Paciente desmarcou": contato no dia seguinte à desmarcação (feita ontem).
+  update public.tarefas set vence_em = hoje where pessoa_id = p and status = 'pendente';
 
   -- 5. Rafael: avaliação no próximo dia útil → confirmação hoje (rotina)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em)
@@ -95,7 +97,7 @@ begin
           (public.etapa_por_marco(c, 'em_negociacao')).id, 2200000)
   returning id into o;
   perform public.definir_proxima_acao(o, 'acompanhar_decisao', 'Acompanhar a decisão de Luiza',
-                                      hoje + 2, 'normal', 'R-RES-02', 1, 'Ficou de pensar');
+                                      hoje + 2, 'normal', 'pensando', 1, 'Ficou de pensar');
 
   -- 7. Marcos: follow-up de orçamento que deveria ter sido feito há 3 dias (atrasada)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em)
@@ -133,7 +135,7 @@ begin
           (select id from public.origens where clinica_id = c and nome = 'Paciente antigo'), hoje - 600)
   returning id into p;
   perform public.abrir_reativacao(p, null, null, 'reativacao', 'Reativar contato com Sofia',
-                                  'Último atendimento em ' || to_char(hoje - 600, 'MM/YYYY'), hoje, 'R-DIA-03');
+                                  'Último atendimento em ' || to_char(hoje - 600, 'MM/YYYY'), hoje, 'paciente_inativo');
   update public.tarefas set vence_em = hoje where pessoa_id = p and status = 'pendente';
 
   -- 10. Ana: fechou lentes; entrada paga; parcela 1 vence hoje (importante)
@@ -172,7 +174,7 @@ begin
           (public.etapa_por_marco(c, 'em_contato')).id)
   returning id into o;
   perform public.definir_proxima_acao(o, 'follow_up', 'Retornar para Fernanda (pediu retorno)',
-                                      hoje + 4, 'alta', 'R-RES-03');
+                                      hoje + 4, 'alta', 'pediu_retorno');
 
   -- 12. Tiago: recebeu orçamento e parou de responder → "Sem resposta" (nova tentativa leve)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em, ultimo_contato_em)
@@ -198,6 +200,18 @@ begin
   update public.oportunidades set reabre_em = hoje + 25 where id = o;
   perform public.mover_etapa(o, public.etapa_por_resultado(c, 'nao_fechou'), 'Achou o investimento alto neste momento',
                              (select id from public.motivos where clinica_id = c and nome = 'Valor alto'));
+
+  -- 14 e 15. Pacientes antigos sem atendimento há meses (público de campanhas de reativação)
+  insert into public.pessoas (clinica_id, tipo_cadastro, nome, whatsapp_e164, origem_id, ultimo_atendimento_informado,
+                              consentimento_marketing)
+  values (c, 'paciente_antigo', 'Gabriela Rocha', '+5511900000014',
+          (select id from public.origens where clinica_id = c and nome = 'Paciente antigo'), hoje - 430, true)
+  returning id into p;
+  insert into public.tratamentos_anteriores (clinica_id, pessoa_id, procedimento_id, realizado_em)
+  values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Clareamento dental'), hoje - 430);
+  insert into public.pessoas (clinica_id, tipo_cadastro, nome, whatsapp_e164, origem_id, ultimo_atendimento_informado)
+  values (c, 'paciente_antigo', 'Heitor Campos', '+5511900000015',
+          (select id from public.origens where clinica_id = c and nome = 'Paciente antigo'), hoje - 280);
 end;
 $$;
 

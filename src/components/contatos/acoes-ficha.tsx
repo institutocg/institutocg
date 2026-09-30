@@ -1,8 +1,8 @@
 "use client";
 
-import { LifeBuoy, Plus } from "lucide-react";
+import { CircleCheck, LifeBuoy, Plus } from "lucide-react";
 import { useState, useTransition } from "react";
-import { abrirNegociacaoAcao, criarResgate } from "@/app/(app)/contatos/acoes";
+import { abrirNegociacaoAcao, concluirTratamento, criarResgate } from "@/app/(app)/contatos/acoes";
 import { avisar } from "@/components/avisos";
 
 export function BotaoResgate({ pessoaId, rotulo }: { pessoaId: string; rotulo: string }) {
@@ -65,6 +65,68 @@ export function AbrirNegociacao({
       >
         <Plus className="size-4" /> {pendente ? "Abrindo…" : "Abrir negociação"}
       </button>
+    </div>
+  );
+}
+
+/** "Concluir tratamento": a revisão fica programada (regra "Retorno após o tratamento"). */
+export function ConcluirTratamento({ pessoaId, meses }: { pessoaId: string; meses: number | null }) {
+  const [aberto, setAberto] = useState(false);
+  const [retorno, setRetorno] = useState("");
+  const [pendente, iniciar] = useTransition();
+  if (!aberto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAberto(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3.5 py-2 text-sm font-medium hover:border-dourado"
+      >
+        <CircleCheck className="size-4" /> Concluir tratamento
+      </button>
+    );
+  }
+  return (
+    <div className="rounded-lg bg-fundo p-3">
+      <p className="text-sm font-medium">Concluir tratamento</p>
+      <p className="mt-1 text-xs text-suave">
+        {meses
+          ? `O convite para a revisão fica programado para daqui a ${meses} meses. Se preferir, escolha outra data.`
+          : "Escolha quando convidar para a revisão (opcional)."}
+      </p>
+      <label className="mt-3 block">
+        <span className="text-xs text-sutil">Data do convite de retorno</span>
+        <input
+          type="date"
+          value={retorno}
+          onChange={(e) => setRetorno(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-borda-forte bg-superficie px-3 py-2 text-sm outline-none focus:border-dourado"
+        />
+      </label>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setAberto(false)}
+          className="rounded-lg border border-borda-forte px-3.5 py-2 text-sm hover:border-dourado"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          disabled={pendente}
+          onClick={() =>
+            iniciar(async () => {
+              const r = await concluirTratamento(pessoaId, retorno || null);
+              if (r.ok) {
+                avisar(r.mensagem);
+                setAberto(false);
+              } else avisar(r.erro, "erro");
+            })
+          }
+          className="rounded-lg bg-dourado px-3.5 py-2 text-sm font-medium text-white hover:bg-dourado-escuro disabled:opacity-50"
+        >
+          {pendente ? "Salvando…" : "Confirmar"}
+        </button>
+      </div>
     </div>
   );
 }

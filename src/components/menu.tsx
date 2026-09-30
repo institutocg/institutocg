@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Plus, Settings, SquareKanban, Sun, Users, Wallet } from "lucide-react";
+import { CalendarDays, Megaphone, Plus, Settings, SquareKanban, Sun, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,9 +8,10 @@ const MENU = [
   { rotulo: "Hoje", href: "/hoje", icone: Sun, pronto: true },
   { rotulo: "Contatos", href: "/contatos", icone: Users, pronto: true },
   { rotulo: "Funil", href: "/funil", icone: SquareKanban, pronto: true },
+  { rotulo: "Campanhas", href: "/campanhas", icone: Megaphone, pronto: true },
   { rotulo: "Agenda", href: "#", icone: CalendarDays, pronto: false },
   { rotulo: "Financeiro", href: "#", icone: Wallet, pronto: false },
-  { rotulo: "Configurações", href: "#", icone: Settings, pronto: false },
+  { rotulo: "Configurações", href: "/configuracoes", icone: Settings, pronto: true },
 ];
 
 export function BotaoNovoPaciente({ compacto = false }: { compacto?: boolean }) {

@@ -12,7 +12,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { z } from "zod";
-import { AbrirNegociacao, BotaoResgate } from "@/components/contatos/acoes-ficha";
+import { AbrirNegociacao, BotaoResgate, ConcluirTratamento } from "@/components/contatos/acoes-ficha";
 import { CartaoAcao } from "@/components/painel/cartao-acao";
 import { comoUsuaria } from "@/lib/db";
 import { formatarMoeda } from "@/lib/moeda";
@@ -306,8 +306,16 @@ export default async function FichaPaciente({
                   itens={[
                     ["Último atendimento", rotuloUltimoAtendimento(c.ultimo_atendimento_informado, c.ultimo_atendimento_faixa) ?? "Não informado"],
                     ["Em tratamento", c.em_tratamento ? "Sim" : "Não"],
+                    ...(c.retorno_previsto_em
+                      ? ([["Convite de retorno", c.retorno_previsto_em.split("-").reverse().join("/")]] as [string, string][])
+                      : []),
                   ]}
                 />
+                {c.em_tratamento && (
+                  <div className="mt-4">
+                    <ConcluirTratamento pessoaId={c.id} meses={ficha.mesesRetorno} />
+                  </div>
+                )}
                 <p className="mt-3 text-xs text-sutil">Já fez</p>
                 {ficha.tratamentos.length ? (
                   <div className="mt-1 flex flex-wrap gap-1.5">

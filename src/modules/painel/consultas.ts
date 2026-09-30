@@ -15,7 +15,7 @@ const COLUNAS = `
   id, pessoa_id, oportunidade_id, agendamento_id, parcela_id, tipo, titulo, descricao, vence_em, horario,
   prioridade, passo, regra, mensagem_sugerida, pessoa_nome, whatsapp_e164, telefone_e164, origem_nome,
   primeiro_contato_em, procedimento, etapa_marco, orcamento_apresentado_em, orcamento_valor_centavos,
-  agendamento_inicio, agendamento_tipo, parcela_numero, parcela_vencimento, parcela_saldo_centavos, parcela_total`;
+  agendamento_inicio, agendamento_tipo, parcela_numero, parcela_vencimento, parcela_saldo_centavos, parcela_total, regra_nome`;
 
 export async function carregarPainel(sessao: Sessao): Promise<{ painel: Painel; motivos: Motivo[] }> {
   return comoUsuaria(sessao.usuarioId, async (db) => {

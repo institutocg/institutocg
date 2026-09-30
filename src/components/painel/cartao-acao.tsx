@@ -106,6 +106,7 @@ export function CartaoAcao({
             {/* A tarefa como está gravada (a usuária pode editá-la) e, abaixo, a orientação do sistema. */}
             {!cartao.pagamento && <p className="mt-0.5 text-sm font-medium text-grafite">{cartao.tituloTarefa}</p>}
             <p className={`mt-0.5 text-sm ${cartao.pagamento ? "text-grafite" : "text-suave"}`}>{cartao.acaoRecomendada}</p>
+            {cartao.regraNome && <p className="mt-1 text-xs text-sutil">Criada pela regra “{cartao.regraNome}”</p>}
           </div>
         )}
         {compacto && <p className="mt-1 text-sm text-grafite">→ {cartao.pagamento ? cartao.acaoRecomendada : cartao.tituloTarefa}</p>}
@@ -351,6 +352,24 @@ const OPCOES: Record<Cartao["registro"], Opcao[]> = {
     { valor: "desistiu", rotulo: "Desistiu" },
     { valor: "numero_invalido", rotulo: "Número não funciona" },
     { valor: "nao_contatar", rotulo: "Não quer mais contato" },
+    { valor: "outro", rotulo: "Outro" },
+  ],
+  // Desmarcou, faltou, sem resposta: as cinco respostas possíveis da conversa.
+  recuperacao: [
+    { valor: "agendou", rotulo: "Remarcou", ajuda: "Informe data e horário" },
+    { valor: "pediu_retorno", rotulo: "Pediu para falar depois" },
+    { valor: "nao_respondeu", rotulo: "Não respondeu" },
+    { valor: "sem_interesse", rotulo: "Não tem interesse" },
+    { valor: "outro", rotulo: "Outro" },
+  ],
+  reativacao: [
+    { valor: "respondeu_interesse", rotulo: "Respondeu com interesse" },
+    { valor: "agendou", rotulo: "Agendou horário", ajuda: "Informe data e horário" },
+    { valor: "pediu_retorno", rotulo: "Pediu para falar depois" },
+    { valor: "nao_respondeu", rotulo: "Não respondeu" },
+    { valor: "sem_interesse", rotulo: "Não tem interesse" },
+    { valor: "nao_contatar", rotulo: "Não quer mais contato" },
+    { valor: "outro", rotulo: "Outro" },
   ],
   agendamento: [
     { valor: "confirmou", rotulo: "Confirmou presença" },
@@ -403,6 +422,7 @@ function JanelaRegistro({
     if (resultado === "agendou" && !agendarEm) return setErro("Informe a data e o horário.");
     if (precisaData && !data) return setErro("Informe a data combinada.");
     if (precisaMotivo && !motivoId) return setErro("Escolha o motivo.");
+    if (resultado === "outro" && !observacao.trim()) return setErro("Descreva o que aconteceu.");
     enviar({
       tarefaId: cartao.id,
       resultado,
@@ -461,6 +481,22 @@ function JanelaRegistro({
           </Campo>
         </>
       )}
+      {resultado === "outro" && (
+        <Campo rotulo="Próximo contato (opcional)">
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={CAMPO} />
+        </Campo>
+      )}
+      {resultado === "nao_respondeu" && (
+        <p className="mt-4 rounded-lg bg-fundo px-3.5 py-2.5 text-sm text-suave">
+          O sistema agenda a próxima tentativa conforme a regra. Se as tentativas acabarem, segue o que a regra define
+          (por exemplo, mover para “Sem resposta” ou “Reativação”).
+        </p>
+      )}
+      {resultado === "sem_interesse" && (
+        <p className="mt-4 rounded-lg bg-fundo px-3.5 py-2.5 text-sm text-suave">
+          A negociação é encerrada com gentileza. Um contato leve fica programado para daqui a alguns meses.
+        </p>
+      )}
       {precisaData && (
         <Campo rotulo="Data combinada">
           <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={CAMPO} />
@@ -472,7 +508,7 @@ function JanelaRegistro({
         </p>
       )}
 
-      <Campo rotulo="Observação (opcional)">
+      <Campo rotulo={resultado === "outro" ? "O que aconteceu?" : "Observação (opcional)"}>
         <textarea
           value={observacao}
           onChange={(e) => setObservacao(e.target.value)}

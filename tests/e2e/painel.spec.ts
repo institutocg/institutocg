@@ -121,17 +121,39 @@ test("registrar contato: validações e 'agendou' cria a confirmação", async (
   await expect(bloco(page, "Urgente").getByRole("article", { name: "Beatriz Almeida" })).toHaveCount(0);
 });
 
+test("desmarcou: a regra aparece no cartão e o contato oferece as 5 respostas", async ({ page }) => {
+  await entrar(page, "secretaria@institutocg.local");
+  const carla = bloco(page, "Urgente").getByRole("article", { name: "Carla Mendes" });
+  await expect(carla).toContainText("Entrar em contato com Carla para remarcar");
+  await expect(carla).toContainText("Criada pela regra “Paciente desmarcou”");
+  await expect(carla.getByRole("button", { name: "Concluir" })).toHaveCount(0);
+
+  await carla.getByRole("button", { name: "Registrar contato" }).click();
+  const janela = page.getByRole("dialog", { name: "Registrar contato" });
+  const opcoes = await janela.getByRole("radiogroup").nth(1).getByRole("radio").allTextContents();
+  expect(opcoes).toEqual(["Remarcou", "Pediu para falar depois", "Não respondeu", "Não tem interesse", "Outro"]);
+
+  await janela.getByRole("radio", { name: "Outro" }).click();
+  await janela.getByRole("button", { name: "Salvar" }).click();
+  await expect(janela.getByRole("alert")).toHaveText("Descreva o que aconteceu.");
+
+  await janela.getByRole("radio", { name: "Não tem interesse" }).click();
+  await janela.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByRole("status")).toContainText("Retomar conversa com Carla");
+  await expect(cartao(page, "Carla Mendes")).toHaveCount(0);
+});
+
 test("não fechou exige motivo e encerra a tarefa", async ({ page }) => {
   await entrar(page, "secretaria@institutocg.local");
-  await cartao(page, "Carla Mendes").getByRole("button", { name: "Registrar contato" }).click();
+  await cartao(page, "João Lima").getByRole("button", { name: "Registrar contato" }).click();
   const janela = page.getByRole("dialog", { name: "Registrar contato" });
   await janela.getByRole("radio", { name: "Não fechou" }).click();
   await janela.getByRole("button", { name: "Salvar" }).click();
   await expect(janela.getByRole("alert")).toHaveText("Escolha o motivo.");
   await janela.getByRole("combobox").selectOption({ label: "Valor alto (voltar a falar em 30 dias)" });
   await janela.getByRole("button", { name: "Salvar" }).click();
-  await expect(page.getByRole("status")).toContainText("Retomar conversa com Carla");
-  await expect(cartao(page, "Carla Mendes")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("Retomar conversa com João");
+  await expect(cartao(page, "João Lima")).toHaveCount(0);
 });
 
 test("marcar como pago remove o lembrete", async ({ page }) => {
@@ -163,9 +185,9 @@ test("erro: concluir uma tarefa que já foi concluída em outra tela", async ({ 
   const b = await browser.newPage();
   await entrar(a, "secretaria@institutocg.local");
   await entrar(b, "dona@institutocg.local");
-  await cartao(a, "Sofia Martins").getByRole("button", { name: "Concluir" }).click();
+  await cartao(a, "Rafael Gomes").getByRole("button", { name: "Concluir" }).click();
   await expect(a.getByRole("status")).toContainText("Tarefa concluída.");
-  await cartao(b, "Sofia Martins").getByRole("button", { name: "Concluir" }).click();
+  await cartao(b, "Rafael Gomes").getByRole("button", { name: "Concluir" }).click();
   await expect(b.getByRole("alert").filter({ hasText: "Esta tarefa já foi concluída." })).toBeVisible();
   await a.close();
   await b.close();

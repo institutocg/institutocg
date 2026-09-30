@@ -14,6 +14,7 @@ const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.");
 const RESULTADOS = [
   "respondeu_interesse", "agendou", "vai_pensar", "pediu_retorno", "nao_respondeu", "fechou",
   "nao_fechou", "desistiu", "nao_contatar", "numero_invalido", "confirmou", "desmarcou", "prometeu_pagar",
+  "sem_interesse", "outro",
 ] as const;
 
 const esquemaRegistro = z
@@ -33,6 +34,8 @@ const esquemaRegistro = z
       ctx.addIssue({ code: "custom", message: "Informe a data combinada." });
     if ((v.resultado === "nao_fechou" || v.resultado === "desistiu") && !v.motivoId)
       ctx.addIssue({ code: "custom", message: "Escolha o motivo." });
+    if (v.resultado === "outro" && !v.observacao?.trim())
+      ctx.addIssue({ code: "custom", message: "Descreva o que aconteceu." });
   });
 
 export type DadosRegistro = z.input<typeof esquemaRegistro>;

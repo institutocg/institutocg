@@ -84,7 +84,7 @@ test("cadastro duplicado aponta o cadastro existente", async ({ page }) => {
 test("paciente antigo: faixa de tempo, tratamentos, salvar e cadastrar o próximo", async ({ page }) => {
   await entrar(page);
   await page.goto("/contatos/novo?tipo=paciente_antigo");
-  await expect(page.getByText("2 cadastrados até agora")).toBeVisible(); // Paulo e Sofia, dos dados fictícios
+  await expect(page.getByText("4 cadastrados até agora")).toBeVisible(); // Paulo, Sofia, Gabriela e Heitor (dados fictícios)
   await expect(campo(page, "Como conheceu")).toHaveCount(0); // não se pergunta para paciente antigo
 
   await campo(page, "Nome completo").fill("Roberto Nunes");
@@ -97,7 +97,7 @@ test("paciente antigo: faixa de tempo, tratamentos, salvar e cadastrar o próxim
 
   const salvo = page.getByRole("status").filter({ hasText: "foi salvo" });
   await expect(salvo).toContainText("Roberto Nunes foi salvo.");
-  await expect(page.getByText("3 cadastrados até agora")).toBeVisible();
+  await expect(page.getByText("5 cadastrados até agora")).toBeVisible();
   await expect(campo(page, "Nome completo")).toHaveValue(""); // formulário limpo para o próximo
 
   // A ficha mostra o histórico na clínica e sugere o resgate

@@ -116,3 +116,28 @@ export async function abrirNegociacaoAcao(pessoaId: string, procedimentoId: stri
     return { ok: false, erro: mensagemDeErro(erro) };
   }
 }
+
+/** Tratamento concluído: registra o último atendimento e agenda o convite de retorno. */
+export async function concluirTratamento(pessoaId: string, retorno: string | null): Promise<Retorno> {
+  const sessao = await exigirSessao();
+  if (!z.uuid().safeParse(pessoaId).success) return { ok: false, erro: "Cadastro inválido." };
+  if (retorno && !/^\d{4}-\d{2}-\d{2}$/.test(retorno)) return { ok: false, erro: "Data inválida." };
+  try {
+    const data = await comoUsuaria(sessao.usuarioId, async (db) => {
+      const { rows } = await db.query<{ retorno: string | null }>(
+        "select public.concluir_tratamento($1, $2::date) as retorno",
+        [pessoaId, retorno || null],
+      );
+      return rows[0].retorno;
+    });
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      mensagem: data
+        ? `Tratamento concluído. O convite para a revisão fica programado para ${data.split("-").reverse().join("/")}.`
+        : "Tratamento concluído.",
+    };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
