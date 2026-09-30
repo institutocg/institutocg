@@ -148,6 +148,9 @@ test("avaliação agendada com data: confirmação automática", async ({ page }
   await janela(page).getByLabel("Data e horário da avaliação").fill(`${daquiA(9)}T09:30`);
   await expect(janela(page).getByText("A confirmação fica marcada para a véspera (dia útil).")).toBeVisible();
   await janela(page).getByRole("button", { name: "Mover" }).click();
+  await expect(janela(page).getByRole("alert")).toHaveText("Escolha a dentista.");
+  await janela(page).getByLabel("Dentista").selectOption({ label: "Dra. Paula Reis" });
+  await janela(page).getByRole("button", { name: "Mover" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Fernanda foi para" })).toContainText("Confirmar a avaliação de Fernanda");
 });
 

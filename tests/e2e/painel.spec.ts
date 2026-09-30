@@ -125,6 +125,9 @@ test("registrar contato: validações e 'agendou' cria a confirmação", async (
   await expect(janela.getByRole("alert")).toHaveText("Informe a data e o horário.");
 
   await janela.getByLabel("Data e horário").fill(`${diaUtilDaquiA(9)}T10:00`);
+  await janela.getByRole("button", { name: "Salvar" }).click();
+  await expect(janela.getByRole("alert")).toHaveText("Escolha a dentista.");
+  await janela.getByRole("combobox").selectOption({ label: "Dra. Lívia Moraes" });
   await janela.getByLabel("Observação (opcional)").fill("Prefere manhã");
   await janela.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("status")).toContainText("Contato registrado. Próxima ação: Confirmar a avaliação de Beatriz");

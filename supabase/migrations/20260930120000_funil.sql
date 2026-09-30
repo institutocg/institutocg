@@ -37,6 +37,7 @@ declare
   v_final  bigint;
   v_parc   int;
   v_entr   bigint;
+  v_prof   uuid;
 begin
   select * into op from public.oportunidades where id = p_oportunidade for update;
   if op.id is null or (auth.uid() is not null and op.clinica_id not in (select public.minhas_clinicas())) then
@@ -95,9 +96,11 @@ begin
   if et.marco = 'avaliacao_agendada' and nullif(p_acao ->> 'agendar_em', '') is not null then
     -- A confirmação na véspera é criada pelo gatilho do agendamento.
     perform set_config('crm.acao_manual', '', true);
+    v_prof := public.dentista_escolhida(op.clinica_id, nullif(p_acao ->> 'profissional_id', '')::uuid);
+    perform public.validar_horario(op.clinica_id, (p_acao ->> 'agendar_em')::timestamp at time zone 'America/Sao_Paulo', 60,
+                                   v_prof, coalesce((p_acao ->> 'encaixe')::boolean, false));
     insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, inicio)
-    values (op.clinica_id, op.pessoa_id, v_alvo,
-            (select id from public.profissionais where clinica_id = op.clinica_id and ativo order by criado_em limit 1),
+    values (op.clinica_id, op.pessoa_id, v_alvo, v_prof,
             'avaliacao', (p_acao ->> 'agendar_em')::timestamp at time zone 'America/Sao_Paulo')
     returning id into v_ag;
     select id into v_tarefa from public.tarefas where chave_dedupe = 'ag:' || v_ag and status = 'pendente';

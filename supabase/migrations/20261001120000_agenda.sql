@@ -269,11 +269,13 @@ declare
   v_ag      uuid;
   v_antes   text := coalesce(current_setting('crm.acao_manual', true), '');
   v_tarefa  jsonb;
+  v_prof    uuid;
 begin
   if p_clinica not in (select public.minhas_clinicas()) then
     raise exception 'Sem acesso a esta clínica.' using errcode = '42501';
   end if;
-  perform public.validar_horario(p_clinica, p_inicio, coalesce(p_duracao, 60), p_profissional, p_encaixe);
+  v_prof := public.dentista_escolhida(p_clinica, p_profissional);
+  perform public.validar_horario(p_clinica, p_inicio, coalesce(p_duracao, 60), v_prof, p_encaixe);
 
   -- Paciente: o selecionado, o que já tem este WhatsApp, ou um cadastro novo.
   if v_pessoa is null then
@@ -320,7 +322,7 @@ begin
 
   insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, procedimento_id,
                                    inicio, duracao_min, status, confirmado_em, observacoes)
-  values (p_clinica, v_pessoa, v_op.id, p_profissional, p_tipo, p_procedimento, p_inicio, coalesce(p_duracao, 60),
+  values (p_clinica, v_pessoa, v_op.id, v_prof, p_tipo, p_procedimento, p_inicio, coalesce(p_duracao, 60),
           case when p_confirmado then 'confirmado' else 'agendado' end::public.status_agendamento,
           case when p_confirmado then now() end, nullif(btrim(p_observacoes), ''))
   returning id into v_ag;
@@ -413,7 +415,9 @@ begin
       using errcode = 'P0001';
   end if;
   perform public.validar_horario(a.clinica_id, p_inicio, coalesce(p_duracao, a.duracao_min),
-                                 coalesce(p_profissional, a.profissional_id), p_encaixe, a.id);
+                                 case when p_profissional is null then a.profissional_id
+                                      else public.dentista_escolhida(a.clinica_id, p_profissional) end,
+                                 p_encaixe, a.id);
 
   -- Antes de criar a nova consulta — tarefas antigas: a recuperação foi resolvida; a confirmação antiga não vale mais.
   update public.tarefas set status = 'concluida', resultado = 'Remarcou para ' || v_quando

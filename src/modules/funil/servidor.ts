@@ -13,6 +13,7 @@ export interface OpcoesFunil {
   responsaveis: { id: string; nome: string }[];
   motivos: { id: string; nome: string; aplica_a: "nao_fechou" | "desistiu"; retorno_sugerido_dias: number | null }[];
   formas: { id: string; nome: string; permite_parcelamento: boolean; max_parcelas: number }[];
+  dentistas: { id: string; nome: string }[];
 }
 
 export async function carregarFunil(db: PoolClient, clinicaId: string, filtros: FiltrosFunil) {
@@ -88,6 +89,9 @@ export async function carregarFunil(db: PoolClient, clinicaId: string, filtros: 
       responsaveis: responsaveis.rows,
       motivos: motivos.rows,
       formas: formas.rows,
+      dentistas: (
+        await db.query("select id, nome from public.profissionais where clinica_id = $1 and ativo order by criado_em", [clinicaId])
+      ).rows,
     } as OpcoesFunil,
   };
 }

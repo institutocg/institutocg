@@ -26,6 +26,8 @@ const esquemaRegistro = z
     data: data.optional(),
     motivoId: uuid.optional(),
     agendarEm: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Informe data e horário.").optional(),
+    profissionalId: z.union([z.literal(""), uuid]).optional(),
+    encaixe: z.boolean().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.resultado === "agendou" && !v.agendarEm)
@@ -83,9 +85,13 @@ export async function registrarContato(dados: DadosRegistro): Promise<Retorno> {
     const { rows } = await db.query<{ proxima: Proxima }>(
       `select public.registrar_acao(
          $1, $2, $3::public.canal_contato, $4, $5::date, $6::uuid,
-         case when $7::text is null then null else ($7::timestamp at time zone 'America/Sao_Paulo') end
+         case when $7::text is null then null else ($7::timestamp at time zone 'America/Sao_Paulo') end,
+         $8::uuid, $9
        ) as proxima`,
-      [v.tarefaId, v.resultado, v.canal ?? null, v.observacao?.trim() || null, v.data ?? null, v.motivoId ?? null, v.agendarEm ?? null],
+      [
+        v.tarefaId, v.resultado, v.canal ?? null, v.observacao?.trim() || null, v.data ?? null, v.motivoId ?? null,
+        v.agendarEm ?? null, v.profissionalId || null, v.encaixe ?? false,
+      ],
     );
     return rows[0].proxima;
   }, "Contato registrado.");
@@ -170,4 +176,16 @@ export async function cancelarTarefa(tarefaId: string, motivo: string): Promise<
   } catch (erro) {
     return { ok: false, erro: mensagemDeErro(erro) };
   }
+}
+
+/** Dentistas que atendem (para escolher ao marcar uma consulta pelo painel). */
+export async function listarDentistas(): Promise<{ id: string; nome: string }[]> {
+  const sessao = await exigirSessao();
+  return comoUsuaria(sessao.usuarioId, async (db) => {
+    const { rows } = await db.query<{ id: string; nome: string }>(
+      "select id, nome from public.profissionais where clinica_id = $1 and ativo order by criado_em",
+      [sessao.clinicaId],
+    );
+    return rows;
+  });
 }

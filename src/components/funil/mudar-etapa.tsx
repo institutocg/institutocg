@@ -36,6 +36,8 @@ export function MudarEtapa({
   const [venceEm, setVenceEm] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [agendarEm, setAgendarEm] = useState("");
+  const [dentistaId, setDentistaId] = useState(opcoes.dentistas.length === 1 ? opcoes.dentistas[0].id : "");
+  const [encaixe, setEncaixe] = useState(false);
   const [valor, setValor] = useState("");
   const [observacao, setObservacao] = useState("");
   const [registrarValores, setRegistrarValores] = useState(true);
@@ -93,6 +95,7 @@ export function MudarEtapa({
     if (criar && !agendandoComData && !venceEm) return setErro("Escolha a data da próxima ação.");
     const valorCentavos = valor.trim() ? paraCentavos(valor) : undefined;
     if (valor.trim() && valorCentavos === null) return setErro("Valor do orçamento inválido.");
+    if (agendandoComData && !dentistaId && opcoes.dentistas.length > 1) return setErro("Escolha a dentista.");
     const comVenda = requer === "financeiro" && registrarValores;
     if (comVenda && centavosVenda.total <= 0) return setErro("Informe o valor do tratamento (ou desmarque “Registrar valores agora”).");
 
@@ -107,6 +110,8 @@ export function MudarEtapa({
         venceEm: venceEm || undefined,
         mensagem,
         agendarEm: agendarEm || undefined,
+        profissionalId: agendandoComData && dentistaId ? dentistaId : undefined,
+        encaixe: agendandoComData ? encaixe : undefined,
         valorCentavos: valorCentavos ?? undefined,
         venda: comVenda
           ? {
@@ -184,6 +189,24 @@ export function MudarEtapa({
               {agendarEm ? "A confirmação fica marcada para a véspera (dia útil)." : "Ainda sem data? Deixe em branco e combine depois."}
             </span>
           </Rotulo>
+        )}
+        {agendandoComData && opcoes.dentistas.length > 0 && (
+          <>
+            <Rotulo texto="Dentista">
+              <select value={dentistaId} onChange={(e) => setDentistaId(e.target.value)} className={CAMPO}>
+                {opcoes.dentistas.length > 1 && <option value="">Escolha…</option>}
+                {opcoes.dentistas.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nome}
+                  </option>
+                ))}
+              </select>
+            </Rotulo>
+            <label className="flex items-center gap-2 text-sm text-suave">
+              <input type="checkbox" checked={encaixe} onChange={(e) => setEncaixe(e.target.checked)} className="size-4 accent-dourado" />
+              Encaixe (permitir horário já ocupado)
+            </label>
+          </>
         )}
 
         {destino?.etapa.marco === "avaliacao_realizada" && (

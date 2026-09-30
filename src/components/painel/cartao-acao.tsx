@@ -2,11 +2,12 @@
 
 import { Check, Copy, ExternalLink, HandCoins, MessageCircle, Pencil, Phone, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import {
   cancelarTarefa,
   concluirTarefa,
   editarTarefa,
+  listarDentistas,
   marcarComoPago,
   registrarContato,
   type DadosRegistro,
@@ -416,6 +417,19 @@ function JanelaRegistro({
   const [agendarEm, setAgendarEm] = useState("");
   const [motivoId, setMotivoId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [dentistas, setDentistas] = useState<{ id: string; nome: string }[] | null>(null);
+  const [profissionalId, setProfissionalId] = useState("");
+  const [encaixe, setEncaixe] = useState(false);
+  // Recuperação: por padrão, remarca com a mesma dentista da consulta perdida.
+  const remarcacao = cartao.registro === "recuperacao";
+
+  useEffect(() => {
+    if (resultado !== "agendou" || dentistas) return;
+    listarDentistas().then((lista) => {
+      setDentistas(lista);
+      if (lista.length === 1) setProfissionalId(lista[0].id);
+    });
+  }, [resultado, dentistas]);
 
   const precisaData = resultado === "pediu_retorno" || resultado === "prometeu_pagar";
   const precisaMotivo = resultado === "nao_fechou" || resultado === "desistiu";
@@ -425,6 +439,9 @@ function JanelaRegistro({
     setErro(null);
     if (!resultado) return setErro("Escolha o que aconteceu.");
     if (resultado === "agendou" && !agendarEm) return setErro("Informe a data e o horário.");
+    if (resultado === "agendou" && !remarcacao && !profissionalId && (dentistas?.length ?? 0) > 1) {
+      return setErro("Escolha a dentista.");
+    }
     if (precisaData && !data) return setErro("Informe a data combinada.");
     if (precisaMotivo && !motivoId) return setErro("Escolha o motivo.");
     if (resultado === "outro" && !observacao.trim()) return setErro("Descreva o que aconteceu.");
@@ -436,6 +453,8 @@ function JanelaRegistro({
       data: data || undefined,
       motivoId: motivoId || undefined,
       agendarEm: agendarEm || undefined,
+      profissionalId: resultado === "agendou" ? profissionalId : undefined,
+      encaixe: resultado === "agendou" ? encaixe : undefined,
     });
   }
 
@@ -464,9 +483,27 @@ function JanelaRegistro({
       </fieldset>
 
       {resultado === "agendou" && (
-        <Campo rotulo="Data e horário">
-          <input type="datetime-local" value={agendarEm} onChange={(e) => setAgendarEm(e.target.value)} className={CAMPO} />
-        </Campo>
+        <>
+          <Campo rotulo="Data e horário">
+            <input type="datetime-local" value={agendarEm} onChange={(e) => setAgendarEm(e.target.value)} className={CAMPO} />
+          </Campo>
+          {dentistas && dentistas.length > 0 && (
+            <Campo rotulo="Dentista">
+              <select value={profissionalId} onChange={(e) => setProfissionalId(e.target.value)} className={CAMPO}>
+                {remarcacao ? <option value="">Mesma dentista da consulta</option> : dentistas.length > 1 && <option value="">Escolha…</option>}
+                {dentistas.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nome}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+          )}
+          <label className="mt-3 flex items-center gap-2 text-sm text-suave">
+            <input type="checkbox" checked={encaixe} onChange={(e) => setEncaixe(e.target.checked)} className="size-4 accent-dourado" />
+            Encaixe (permitir horário já ocupado)
+          </label>
+        </>
       )}
       {precisaMotivo && (
         <>

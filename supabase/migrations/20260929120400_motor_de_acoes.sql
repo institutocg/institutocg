@@ -663,6 +663,33 @@ as $$
     else 'a ligação' end;
 $$;
 
+-- Dentista da consulta: a escolhida (precisa ser desta clínica e estar atendendo); sem
+-- escolha, só vale a padrão se a clínica tiver uma única dentista — com várias, pergunta.
+create or replace function public.dentista_escolhida(p_clinica uuid, p_escolhida uuid)
+returns uuid
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_n  int;
+begin
+  if p_escolhida is not null then
+    select id into v_id from public.profissionais where id = p_escolhida and clinica_id = p_clinica and ativo;
+    if v_id is null then
+      raise exception 'Dentista não encontrada ou inativa.' using errcode = 'P0001';
+    end if;
+    return v_id;
+  end if;
+  select count(*), min(id::text)::uuid into v_n, v_id from public.profissionais where clinica_id = p_clinica and ativo;
+  if v_n = 1 then return v_id; end if;
+  if v_n = 0 then return null; end if;
+  raise exception 'Escolha a dentista.' using errcode = 'P0001';
+end;
+$$;
+
 -- Novo agendamento → confirmar na véspera; avaliação move o funil.
 create or replace function public.motor_novo_agendamento()
 returns trigger
@@ -838,7 +865,9 @@ create or replace function public.registrar_acao(
   p_observacao    text default null,
   p_data          date default null,
   p_motivo        uuid default null,
-  p_agendar_em    timestamptz default null
+  p_agendar_em    timestamptz default null,
+  p_profissional  uuid default null,        -- dentista (ao agendar/remarcar)
+  p_encaixe       boolean default false
 )
 returns jsonb
 language plpgsql
@@ -862,6 +891,7 @@ declare
   v_sit     text;
   r         public.regras_followup;
   v_esgotar text;
+  v_prof    uuid;
 begin
   select * into t from public.tarefas where id = p_tarefa for update;
   -- Roda com privilégios do sistema: confere se a tarefa é da clínica de quem chama.
@@ -1084,13 +1114,16 @@ begin
          order by a.status_em desc limit 1;
       end if;
       if v_ag is not null then
-        v_ag := (public.remarcar_consulta(v_ag, p_agendar_em, p_encaixe => true) ->> 'id')::uuid;
+        -- Sem dentista escolhida, a remarcação mantém a da consulta perdida.
+        v_ag := (public.remarcar_consulta(v_ag, p_agendar_em, null,
+                   case when p_profissional is not null then public.dentista_escolhida(t.clinica_id, p_profissional) end,
+                   p_encaixe) ->> 'id')::uuid;
       else
-        -- Horário de atendimento vale também aqui (encaixe permitido).
-        perform public.validar_horario(t.clinica_id, p_agendar_em, 60, null, true);
+        v_prof := public.dentista_escolhida(t.clinica_id, p_profissional);
+        -- Horário de atendimento e agenda da dentista valem também aqui.
+        perform public.validar_horario(t.clinica_id, p_agendar_em, 60, v_prof, p_encaixe);
         insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, inicio)
-        values (t.clinica_id, t.pessoa_id, v_op.id,
-                (select id from public.profissionais where clinica_id = t.clinica_id and ativo order by criado_em limit 1),
+        values (t.clinica_id, t.pessoa_id, v_op.id, v_prof,
                 case when v_marco = 'avaliacao_realizada' then 'apresentacao_orcamento' else 'avaliacao' end::public.tipo_agendamento,
                 p_agendar_em)
         returning id into v_ag;
@@ -1526,7 +1559,9 @@ left join public.parcelas pa on pa.id = t.parcela_id
 left join public.vendas ve on ve.id = pa.venda_id
 where t.status = 'pendente';
 
-grant execute on function public.registrar_acao(uuid, text, public.canal_contato, text, date, uuid, timestamptz) to authenticated;
-revoke execute on function public.registrar_acao(uuid, text, public.canal_contato, text, date, uuid, timestamptz) from anon;
+grant execute on function public.registrar_acao(uuid, text, public.canal_contato, text, date, uuid, timestamptz, uuid, boolean)
+  to authenticated;
+revoke execute on function public.registrar_acao(uuid, text, public.canal_contato, text, date, uuid, timestamptz, uuid, boolean)
+  from anon;
 revoke execute on function public.marcar_parcela_paga(uuid, uuid, date) from anon;
 revoke execute on function public.preparar_dia(uuid, boolean) from anon;

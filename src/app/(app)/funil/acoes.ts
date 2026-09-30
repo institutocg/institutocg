@@ -53,6 +53,8 @@ const esquemaMover = z.object({
   venceEm: data.optional(),
   mensagem: z.string().max(2000).optional(),
   agendarEm: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
+  profissionalId: uuid.optional(),
+  encaixe: z.boolean().optional(),
   valorCentavos: centavos.optional(),
   venda: z
     .object({
@@ -84,6 +86,8 @@ export async function moverEtapa(
   if (v.venceEm) acao.vence_em = v.venceEm;
   if (v.mensagem?.trim()) acao.mensagem = v.mensagem.trim();
   if (v.agendarEm) acao.agendar_em = v.agendarEm;
+  if (v.profissionalId) acao.profissional_id = v.profissionalId;
+  if (v.encaixe) acao.encaixe = true;
   if (v.valorCentavos !== undefined) acao.valor_centavos = v.valorCentavos;
   if (v.venda) {
     acao.venda = {

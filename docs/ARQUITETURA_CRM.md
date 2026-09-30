@@ -1016,7 +1016,7 @@ A agenda conversa com o CRM. **Nova consulta:** paciente (busca por nome ou tele
 
 **Tela:** "Pacientes a recuperar" sempre no topo (prazo, motivo, próxima ação, Remarcar, WhatsApp com a mensagem, Abrir paciente; "sem ação" em vermelho), taxa de recuperação dos últimos 30 dias, semana de segunda a sexta com filtro por dentista (cada uma com sua cor), e o número de pacientes a recuperar ao lado de "Agenda" no menu. Na ficha do paciente, "Agendar consulta".
 
-**Dentistas:** a clínica passou a ter três dentistas (a dona e mais duas); cadastro em Configurações.
+**Dentistas:** a clínica passou a ter três dentistas (a dona e mais duas); cadastro em Configurações. Toda consulta pede a dentista — também quando marcada pelo funil ou pelo painel (a pedido da clínica, sem dentista padrão); ao remarcar uma recuperação, sugere a mesma dentista.
 
 ## 15. Decisões pendentes
 

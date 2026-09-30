@@ -74,6 +74,31 @@ select set_config('t.r', public.agendar(testes.v('ag'), testes.v('teo'), 'avalia
 select testes.ok((select pf.nome = 'Dra. Paula' from public.agendamentos a join public.profissionais pf on pf.id = a.profissional_id
                    where a.pessoa_id = testes.v('teo')),
   'outra dentista no mesmo horário: sem conflito, cada dentista com a sua agenda');
+
+-- Com mais de uma dentista, o sistema pede a escolha (agenda, funil e painel).
+select testes.erro(format($$select public.agendar(%L, %L, 'retorno', null, %L, 30, null)$$,
+                          testes.v('ag'), testes.v('teo'), testes.quando(7, '09:00')),
+  'Escolha a dentista', 'agenda: com várias dentistas, é preciso escolher');
+with x as (
+  insert into public.pessoas (clinica_id, nome, whatsapp_e164) values (testes.v('ag'), 'Ivo Lemos', '+5511940000010')
+  returning id
+) select testes.guardar('ivo', id) from x;
+with x as (
+  insert into public.oportunidades (clinica_id, pessoa_id, etapa_id)
+  values (testes.v('ag'), testes.v('ivo'), (public.etapa_por_marco(testes.v('ag'), 'em_contato')).id) returning id
+) select testes.guardar('op_ivo', id) from x;
+select testes.erro(format($$select public.mover_etapa_manual(%L, %L, null, null, %L)$$, testes.v('op_ivo'),
+                          (public.etapa_por_marco(testes.v('ag'), 'avaliacao_agendada')).id,
+                          jsonb_build_object('agendar_em', to_char(testes.util_ag(7), 'YYYY-MM-DD') || 'T09:00')),
+  'Escolha a dentista', 'funil: avaliação com data exige escolher a dentista');
+select testes.erro(format($$select public.registrar_acao(%L, 'agendou', null, null, null, null, %L)$$,
+                          (testes.pend_ag(testes.v('ivo'))).id, testes.quando(7, '09:00')),
+  'Escolha a dentista', 'painel: "agendou" exige escolher a dentista');
+select public.registrar_acao((testes.pend_ag(testes.v('ivo'))).id, 'agendou', null, null, null, null, testes.quando(7, '09:00'),
+  (select id from public.profissionais where clinica_id = testes.v('ag') and nome = 'Dra. Paula'));
+select testes.ok((select pf.nome = 'Dra. Paula' from public.agendamentos a join public.profissionais pf on pf.id = a.profissional_id
+                   where a.pessoa_id = testes.v('ivo')),
+  'painel: consulta marcada com a dentista escolhida');
 select testes.erro(format($$select public.agendar(%L, %L, 'avaliacao', null, %L, 60, %L)$$,
                           testes.v('ag'), testes.v('lia'), testes.quando(5, '18:30'), testes.v('prof')),
   'Fora do horário', 'fora do horário de atendimento (08h–19h)');

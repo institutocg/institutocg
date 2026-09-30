@@ -59,7 +59,7 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 
 **Garantias:** consultas nunca são apagadas; desmarcada/remarcada/cancelada não volta a "agendada" (é preciso remarcar); um gatilho cria a recuperação mesmo com a regra desligada ou a ação recusada no funil; a tarefa de recuperação não pode ser descartada (só resolvida registrando o resultado); a rotina diária recria a recuperação de qualquer desmarcação que tenha ficado "sem ação". `v_recuperacao` classifica cada desmarcação/falta/cancelamento dos últimos 120 dias em *a recuperar*, *em acompanhamento*, *recuperado*, *encerrado* ou *sem ação*.
 
-**Dentistas:** cadastradas em Configurações (nome, cor, se atende). Conflito de horário só com a mesma dentista; desativar exige remarcar as consultas futuras.
+**Dentistas:** cadastradas em Configurações (nome, cor, se atende). Com mais de uma dentista ativa, toda consulta pede a escolha — na agenda, no funil (avaliação com data) e no "Registrar contato" do painel (`dentista_escolhida()`); na remarcação de uma recuperação, a sugestão é a mesma dentista da consulta perdida. Conflito de horário só com a mesma dentista; desativar exige remarcar as consultas futuras.
 
 ## Onde está cada requisito
 
