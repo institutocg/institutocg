@@ -2,11 +2,14 @@ import { LogOut } from "lucide-react";
 import { Avisos } from "@/components/avisos";
 import { Marca } from "@/components/marca";
 import { BotaoNovoPaciente, Menu } from "@/components/menu";
+import { comoUsuaria } from "@/lib/db";
+import { contarARecuperar } from "@/modules/agenda/servidor";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import { sair } from "../(auth)/login/acoes";
 
 export default async function LayoutInterno({ children }: LayoutProps<"/">) {
   const sessao = await exigirSessao();
+  const aRecuperar = await comoUsuaria(sessao.usuarioId, (db) => contarARecuperar(db, sessao.clinicaId));
 
   return (
     <div className="min-h-screen lg:flex">
@@ -25,7 +28,7 @@ export default async function LayoutInterno({ children }: LayoutProps<"/">) {
         <div className="hidden px-4 pb-5 lg:block">
           <BotaoNovoPaciente />
         </div>
-        <Menu />
+        <Menu aRecuperar={aRecuperar} />
         <div className="hidden border-t border-borda px-6 py-5 lg:block">
           <p className="text-sm font-medium">{sessao.nome}</p>
           <p className="text-xs text-sutil">{sessao.clinicaNome}</p>

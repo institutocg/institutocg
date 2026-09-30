@@ -203,6 +203,28 @@ begin
   perform public.mover_etapa(o, public.etapa_por_resultado(c, 'nao_fechou'), 'Achou o investimento alto neste momento',
                              (select id from public.motivos where clinica_id = c and nome = 'Valor alto'));
 
+  -- Dentistas (fictícias): a dona da clínica e mais duas.
+  update public.profissionais set nome = 'Dra. Cristina' where id = prof;
+  insert into public.profissionais (clinica_id, nome, cor) values
+    (c, 'Dra. Paula Reis', '#5F8A6A'),
+    (c, 'Dra. Lívia Moraes', '#7A6FA8');
+
+  -- Agenda da semana: consultas já confirmadas (sem tarefas novas no painel).
+  insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, procedimento_id,
+                                   inicio, duracao_min, status, confirmado_em)
+  select c, pe.id, null, prof, 'procedimento',
+         (select id from public.procedimentos where clinica_id = c and nome = 'Facetas/lentes em resina'),
+         (public.proximo_dia_util(c, hoje) + time '11:00') at time zone 'America/Sao_Paulo', 90, 'confirmado', now()
+    from public.pessoas pe where pe.clinica_id = c and pe.nome = 'Ana Costa';
+  insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, procedimento_id,
+                                   inicio, duracao_min, status, confirmado_em)
+  select c, pe.id, o.id, (select id from public.profissionais where clinica_id = c and nome = 'Dra. Paula Reis'),
+         'apresentacao_orcamento', o.procedimento_id,
+         (public.proximo_dia_util(c, public.proximo_dia_util(c, hoje) + 1) + time '16:00') at time zone 'America/Sao_Paulo',
+         30, 'confirmado', now()
+    from public.pessoas pe join public.oportunidades o on o.pessoa_id = pe.id and o.status = 'aberta'
+   where pe.clinica_id = c and pe.nome = 'Luiza Prado';
+
   -- 14 e 15. Pacientes antigos sem atendimento há meses (público de campanhas de reativação)
   insert into public.pessoas (clinica_id, tipo_cadastro, nome, whatsapp_e164, origem_id, ultimo_atendimento_informado,
                               consentimento_marketing)

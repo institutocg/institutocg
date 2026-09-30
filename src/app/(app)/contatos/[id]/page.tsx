@@ -222,6 +222,14 @@ export default async function FichaPaciente({
                 )}
               </div>
             )}
+            {!c.nao_contatar && (
+              <Link
+                href={`/agenda?novo=${c.id}`}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3 py-1.5 text-sm hover:border-dourado"
+              >
+                <CalendarClock className="size-4 text-dourado" /> Agendar consulta
+              </Link>
+            )}
             {ficha.proximasConsultas.map((a) => (
               <p key={a.inicio.toISOString()} className="mt-3 flex items-center gap-2 text-sm text-suave">
                 <CalendarClock className="size-4 text-dourado" />

@@ -224,6 +224,7 @@ create table public.agendamentos (
   inicio              timestamptz not null,
   duracao_min         int not null default 60 check (duracao_min between 5 and 600),
   status              public.status_agendamento not null default 'agendado',
+  status_em           timestamptz not null default now(),     -- quando o status mudou pela última vez
   motivo_id           uuid,                                   -- motivo da desmarcação
   remarcado_para_id   uuid,
   confirmado_em       timestamptz,
@@ -548,6 +549,8 @@ begin
       when 'compareceu' then 'atendimento'
       when 'desmarcado' then 'paciente_desmarcou'
       when 'faltou' then 'paciente_faltou'
+      when 'cancelado_clinica' then 'nota'
+      when 'remarcado' then 'nota'
     end;
     if v_tipo is not null then
       insert into public.interacoes
@@ -555,12 +558,21 @@ begin
       values (
         new.clinica_id, new.pessoa_id, new.oportunidade_id, new.id, v_tipo,
         case when new.status = 'compareceu' then 'presencial'::public.canal_contato end,
-        'Agendamento de ' || to_char(new.inicio at time zone 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI')
+        case new.status
+          when 'compareceu' then 'Compareceu à consulta de '
+          when 'desmarcado' then 'Desmarcou a consulta de '
+          when 'faltou' then 'Faltou à consulta de '
+          when 'cancelado_clinica' then 'A clínica cancelou a consulta de '
+          else 'Remarcou a consulta de '
+        end || to_char(new.inicio at time zone 'America/Sao_Paulo', 'DD/MM/YYYY "às" HH24:MI')
+          || coalesce(' — motivo: ' || lower((select nome from public.motivos where id = new.motivo_id)), '')
+          || coalesce(' — ' || nullif(btrim(current_setting('crm.observacao_agenda', true)), ''), '')
       );
     end if;
     if new.status = 'confirmado' and new.confirmado_em is null then
       new.confirmado_em := now();
     end if;
+    new.status_em := now();
   end if;
   return new;
 end;

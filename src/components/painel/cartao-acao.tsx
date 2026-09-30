@@ -245,11 +245,16 @@ function JanelaEditar({
             </Campo>
           </div>
           {cartao.pagamento && <p className="mt-1 text-xs text-sutil">A data do lembrete acompanha o vencimento da parcela.</p>}
+          {!cartao.pagamento && !cartao.recusavel && (
+            <p className="mt-1 text-xs text-sutil">
+              Recuperação de consulta: não pode ser descartada. Registre o resultado do contato (ex.: não tem interesse).
+            </p>
+          )}
           <Campo rotulo="Mensagem sugerida">
             <textarea rows={4} value={mensagem} onChange={(e) => setMensagem(e.target.value)} className={CAMPO} />
           </Campo>
           <Rodape>
-            {!cartao.pagamento && (
+            {cartao.recusavel && (
               <button type="button" onClick={() => setCancelando(true)} className="mr-auto text-sm text-urgente underline-offset-4 hover:underline">
                 Não fazer esta ação
               </button>

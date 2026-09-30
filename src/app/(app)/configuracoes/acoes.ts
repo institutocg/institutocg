@@ -81,3 +81,49 @@ export async function salvarLimites(dados: z.input<typeof esquemaLimites>): Prom
     return { ok: false, erro: mensagemDeErro(erro) };
   }
 }
+
+const esquemaDentista = z.object({
+  id: z.union([z.literal(""), z.uuid()]),
+  nome: z.string().trim().min(3, "Informe o nome da dentista.").max(80),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Cor inválida."),
+  ativo: z.boolean(),
+});
+
+/** Inclui ou altera uma dentista da agenda (somente a administradora). */
+export async function salvarDentista(dados: z.input<typeof esquemaDentista>): Promise<Retorno> {
+  const sessao = await exigirSessao();
+  if (sessao.papel !== "admin") return { ok: false, erro: "Somente a administradora altera as dentistas." };
+  const lido = esquemaDentista.safeParse(dados);
+  if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
+  const v = lido.data;
+  try {
+    await comoUsuaria(sessao.usuarioId, async (db) => {
+      if (!v.id) {
+        await db.query("insert into public.profissionais (clinica_id, nome, cor) values ($1, $2, $3)", [sessao.clinicaId, v.nome, v.cor]);
+        return;
+      }
+      if (!v.ativo) {
+        // Desativar só depois de remarcar as consultas futuras (nenhuma consulta fica sem dentista).
+        const { rows } = await db.query<{ n: number }>(
+          `select count(*)::int as n from public.agendamentos
+            where profissional_id = $1 and status in ('agendado', 'confirmado') and inicio >= now()`,
+          [v.id],
+        );
+        if (rows[0].n > 0) {
+          throw Object.assign(
+            new Error(`Esta dentista tem ${rows[0].n} ${rows[0].n === 1 ? "consulta futura" : "consultas futuras"}. Remarque antes de desativar.`),
+            { code: "P0001" },
+          );
+        }
+      }
+      const r = await db.query("update public.profissionais set nome = $2, cor = $3, ativo = $4 where id = $1 and clinica_id = $5", [
+        v.id, v.nome, v.cor, v.ativo, sessao.clinicaId,
+      ]);
+      if (!r.rowCount) throw Object.assign(new Error("Dentista não encontrada ou sem permissão."), { code: "P0002" });
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, mensagem: v.id ? "Dentista atualizada." : "Dentista incluída. Ela já aparece na agenda." };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}

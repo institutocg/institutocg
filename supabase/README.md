@@ -14,6 +14,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260930120000_funil.sql` | `mover_etapa_manual()` (mudança de etapa com a ação confirmada/editada pela usuária, agendamento, fechamento com parcelas) e proteção das funções internas do motor |
 | `20260929120500_resgate.sql` | `criar_resgate()` (tarefa de manutenção/reativação sob demanda para paciente antigo) e `sem_acento()` para a busca |
 | `20260930130000_tratamento_e_campanhas.sql` | Fechou → "em tratamento"; `concluir_tratamento()` (agenda o convite de retorno); campanhas de reativação (`prever_campanha`, `criar_campanha`, `encerrar_campanha`, visão `v_campanhas`) |
+| `20261001120000_agenda.sql` | **Agenda comercial**: `agendar()` (paciente existente ou novo, procedimento, data, horário, dentista, status; horário de atendimento e conflito por dentista), `desmarcar_consulta()`, `remarcar_consulta()`, `mudar_status_consulta()`, `buscar_pacientes()`, garantia de recuperação e visões `v_agenda` e `v_recuperacao` |
 
 ## Motor de ações — regras de follow-up configuráveis
 
@@ -43,6 +44,22 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 **Garantias:** negociação aberta nunca fica sem próxima ação (a rotina diária cria "Definir o próximo passo", mesmo com a regra desligada); datas sempre em dia útil; reativações respeitam limite por dia e intervalo mínimo desde o último contato; quem pediu para não ser contatado nunca recebe tarefa; **nenhuma mensagem é enviada automaticamente** — o CRM só sugere.
 
 **Campanhas:** a administradora escolhe o público (sem atendimento há X meses, quem fez um procedimento há X meses, quem não fechou há X meses), revisa a lista, escreve a mensagem e o sistema distribui os contatos em dias úteis com limite diário. Ficam de fora: quem não aceita contato (ou marketing, se marcado), quem está negociando, quem participou de campanha nos últimos 30 dias e quem está com pagamento em atraso.
+
+## Agenda comercial — nenhuma desmarcação desaparece
+
+| Evento na agenda | O que o sistema faz |
+|---|---|
+| Consulta marcada | Liga à negociação (abre uma, se for avaliação); funil vai para "Avaliação agendada"; confirmação 1 dia útil antes (se não veio já confirmada) |
+| Confirmou | Confirmação concluída |
+| Desmarcou | Evento no histórico (com motivo e observação) → status "desmarcou" → tarefa urgente "Entrar em contato com X para remarcar" no dia seguinte (ou na data combinada), com mensagem de remarcação citando a consulta → aparece no painel "Hoje" e em "Pacientes a recuperar" |
+| Faltou | Ação específica de recuperação, com mensagem de quem faltou |
+| Cancelado pela clínica | Motivo obrigatório; tarefa "Remarcar o horário de X" com pedido de desculpas |
+| Remarcou | Nova consulta na agenda; a antiga aponta para ela; a recuperação é concluída ("Remarcou para …"), a confirmação antiga é cancelada e a nova é criada |
+| Compareceu | Funil vai para "Consulta realizada" e começa o contato pós-consulta |
+
+**Garantias:** consultas nunca são apagadas; desmarcada/remarcada/cancelada não volta a "agendada" (é preciso remarcar); um gatilho cria a recuperação mesmo com a regra desligada ou a ação recusada no funil; a tarefa de recuperação não pode ser descartada (só resolvida registrando o resultado); a rotina diária recria a recuperação de qualquer desmarcação que tenha ficado "sem ação". `v_recuperacao` classifica cada desmarcação/falta/cancelamento dos últimos 120 dias em *a recuperar*, *em acompanhamento*, *recuperado*, *encerrado* ou *sem ação*.
+
+**Dentistas:** cadastradas em Configurações (nome, cor, se atende). Conflito de horário só com a mesma dentista; desativar exige remarcar as consultas futuras.
 
 ## Onde está cada requisito
 
@@ -76,7 +93,7 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 npm run test:db    # sobe um PostgreSQL temporário, aplica as migrações, o seed e os testes
 ```
 
-Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql` e `18_regras_e_campanhas.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
+Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, `18_regras_e_campanhas.sql` e `19_agenda.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
 
 ## Implantação no Supabase (quando formos para produção)
 

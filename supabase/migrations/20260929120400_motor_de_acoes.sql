@@ -649,6 +649,20 @@ create trigger motor_resultado_oportunidade
   after update on public.oportunidades
   for each row execute function public.motor_resultado_oportunidade();
 
+-- "a avaliação", "o procedimento"… (usado nas mensagens e títulos)
+create or replace function public.rotulo_consulta(p_tipo public.tipo_agendamento)
+returns text
+language sql immutable
+as $$
+  select case p_tipo
+    when 'avaliacao' then 'a avaliação'
+    when 'apresentacao_orcamento' then 'a apresentação do orçamento'
+    when 'procedimento' then 'o procedimento'
+    when 'retorno' then 'o retorno'
+    when 'manutencao' then 'a manutenção'
+    else 'a ligação' end;
+$$;
+
 -- Novo agendamento → confirmar na véspera; avaliação move o funil.
 create or replace function public.motor_novo_agendamento()
 returns trigger
@@ -661,13 +675,7 @@ declare
   v_hora   text := to_char(new.inicio at time zone 'America/Sao_Paulo', 'HH24:MI');
   r        public.regras_followup := public.regra(new.clinica_id, 'confirmacao');
   v_quando date;
-  v_rotulo text := case new.tipo
-    when 'avaliacao' then 'a avaliação'
-    when 'apresentacao_orcamento' then 'a apresentação do orçamento'
-    when 'procedimento' then 'o procedimento'
-    when 'retorno' then 'o retorno'
-    when 'manutencao' then 'a manutenção'
-    else 'a ligação' end;
+  v_rotulo text := public.rotulo_consulta(new.tipo);
 begin
   if new.status not in ('agendado', 'confirmado') then return null; end if;
 
@@ -746,13 +754,19 @@ begin
       'desmarcou', new.pessoa_id, new.oportunidade_id, v_chave, p_base => v_hoje, p_agendamento => new.id,
       p_descricao => case when new.status = 'faltou' then 'Faltou ao agendamento de ' else 'Desmarcou o agendamento de ' end || v_quando,
       p_substituir => true,
-      p_tipo => case when new.status = 'faltou' then 'recuperar_falta'::public.tipo_tarefa end);
+      p_tipo => case when new.status = 'faltou' then 'recuperar_falta'::public.tipo_tarefa end,
+      p_extras => jsonb_build_object('consulta', public.rotulo_consulta(new.tipo),
+                    'data', to_char(new.inicio at time zone 'America/Sao_Paulo', 'DD/MM'),
+                    'horario', to_char(new.inicio at time zone 'America/Sao_Paulo', 'HH24:MI')));
 
   elsif new.status = 'cancelado_clinica' then
     perform public.criar_tarefa_auto(
       new.pessoa_id, new.oportunidade_id, 'follow_up', 'agenda',
-      'Remarcar o horário de ' || v_nome, v_hoje, 'alta', 'clinica_cancelou', v_chave,
-      p_agendamento => new.id, p_descricao => 'A clínica cancelou o horário');
+      'Remarcar o horário de ' || v_nome, v_hoje, 'alta', 'clinica_cancelou', 'rec:' || new.id,
+      p_agendamento => new.id, p_descricao => 'A clínica cancelou o horário',
+      p_mensagem => public.renderizar_mensagem(new.clinica_id, 'clinica_cancelou', new.pessoa_id, null,
+        jsonb_build_object('consulta', public.rotulo_consulta(new.tipo),
+                           'data', to_char(new.inicio at time zone 'America/Sao_Paulo', 'DD/MM'))));
 
   elsif new.status = 'compareceu' and new.tipo = 'avaliacao' and new.oportunidade_id is not null then
     -- Passou pela consulta (onde recebe o orçamento): regra "Saiu da consulta sem fechar".
@@ -1061,16 +1075,25 @@ begin
                   coalesce(p_data, v_hoje + coalesce(r.prazo_dias, 1)), coalesce(r.prioridade, 'alta'), 'em_contato');
 
     when 'agendou' then
-      insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, inicio)
-      values (t.clinica_id, t.pessoa_id, v_op.id,
-              (select id from public.profissionais where clinica_id = t.clinica_id and ativo order by criado_em limit 1),
-              case when v_marco in ('avaliacao_realizada', 'orcamento_apresentado', 'em_negociacao')
-                   then 'apresentacao_orcamento' else 'avaliacao' end::public.tipo_agendamento,
-              p_agendar_em)
-      returning id into v_ag;
-      -- Se a recuperação veio de um agendamento desmarcado, registra a remarcação.
-      if t.agendamento_id is not null and t.tipo in ('recuperar_desmarcacao', 'recuperar_falta') then
-        update public.agendamentos set remarcado_para_id = v_ag where id = t.agendamento_id;
+      -- Recuperação de desmarcação/falta/cancelamento: é uma remarcação da consulta perdida.
+      if t.tipo in ('recuperar_desmarcacao', 'recuperar_falta') or t.regra = 'clinica_cancelou' then
+        select a.id into v_ag from public.agendamentos a
+         where a.id = t.agendamento_id and a.remarcado_para_id is null
+            or (t.agendamento_id is null and a.pessoa_id = t.pessoa_id and a.remarcado_para_id is null
+                and a.status in ('desmarcado', 'faltou', 'cancelado_clinica'))
+         order by a.status_em desc limit 1;
+      end if;
+      if v_ag is not null then
+        v_ag := (public.remarcar_consulta(v_ag, p_agendar_em, p_encaixe => true) ->> 'id')::uuid;
+      else
+        -- Horário de atendimento vale também aqui (encaixe permitido).
+        perform public.validar_horario(t.clinica_id, p_agendar_em, 60, null, true);
+        insert into public.agendamentos (clinica_id, pessoa_id, oportunidade_id, profissional_id, tipo, inicio)
+        values (t.clinica_id, t.pessoa_id, v_op.id,
+                (select id from public.profissionais where clinica_id = t.clinica_id and ativo order by criado_em limit 1),
+                case when v_marco = 'avaliacao_realizada' then 'apresentacao_orcamento' else 'avaliacao' end::public.tipo_agendamento,
+                p_agendar_em)
+        returning id into v_ag;
       end if;
       select id into v_prox from public.tarefas where chave_dedupe = 'ag:' || v_ag and status = 'pendente';
 
@@ -1296,6 +1319,24 @@ begin
       p_descricao => 'Consulta de ' || to_char(r.inicio at time zone 'America/Sao_Paulo', 'DD/MM "às" HH24:MI')
                      || ' sem registro de comparecimento',
       p_agendamento => r.id);
+  end loop;
+
+  -- Garantia: nenhuma desmarcação, falta ou cancelamento fica sem ação comercial.
+  for r in
+    select v.agendamento_id, v.pessoa_id, v.status, v.inicio, a.oportunidade_id,
+           coalesce(nullif(p.apelido_tratamento, ''), split_part(p.nome, ' ', 1)) as nome
+      from public.v_recuperacao v
+      join public.agendamentos a on a.id = v.agendamento_id
+      join public.pessoas p on p.id = v.pessoa_id
+     where v.clinica_id = p_clinica and v.situacao = 'sem_acao'
+       and not p.nao_contatar and p.consentimento_contato and p.arquivado_em is null
+  loop
+    perform public.criar_tarefa_auto(r.pessoa_id, r.oportunidade_id,
+      case when r.status = 'faltou' then 'recuperar_falta' else 'recuperar_desmarcacao' end::public.tipo_tarefa,
+      'recuperacao', 'Entrar em contato com ' || r.nome || ' para remarcar', v_hoje, 'urgente', 'desmarcou',
+      'rec:' || r.agendamento_id, 1,
+      'Consulta de ' || to_char(r.inicio at time zone 'America/Sao_Paulo', 'DD/MM "às" HH24:MI') || ' ainda sem recuperação',
+      r.agendamento_id);
   end loop;
 
   -- Garantia: toda negociação aberta tem uma próxima ação.

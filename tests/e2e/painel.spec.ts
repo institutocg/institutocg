@@ -10,6 +10,15 @@ async function entrar(page: Page, email: string) {
 const cartao = (page: Page, nome: string) => page.getByRole("article", { name: nome });
 const bloco = (page: Page, titulo: string) => page.getByRole("region", { name: titulo });
 
+/** Daqui a N dias, avançando para segunda se cair no fim de semana (a clínica não atende). */
+function diaUtilDaquiA(dias: number) {
+  let d = new Date(Date.now() + dias * 86_400_000);
+  while ([0, 6].includes(new Date(d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }) + "T12:00:00Z").getUTCDay())) {
+    d = new Date(d.getTime() + 86_400_000);
+  }
+  return d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+}
+
 function daquiA(dias: number) {
   const d = new Date(Date.now() + dias * 86_400_000);
   return d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }); // AAAA-MM-DD
@@ -115,7 +124,7 @@ test("registrar contato: validações e 'agendou' cria a confirmação", async (
   await janela.getByRole("button", { name: "Salvar" }).click();
   await expect(janela.getByRole("alert")).toHaveText("Informe a data e o horário.");
 
-  await janela.getByLabel("Data e horário").fill(`${daquiA(10)}T10:00`);
+  await janela.getByLabel("Data e horário").fill(`${diaUtilDaquiA(9)}T10:00`);
   await janela.getByLabel("Observação (opcional)").fill("Prefere manhã");
   await janela.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("status")).toContainText("Contato registrado. Próxima ação: Confirmar a avaliação de Beatriz");

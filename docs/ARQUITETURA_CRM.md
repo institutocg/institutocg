@@ -1001,13 +1001,30 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 
 **Sugestões de marketing aplicadas:** contato no dia seguinte à desmarcação (ainda "quente", sem parecer cobrança no mesmo dia); tentativas espaçadas e com limite; quem está com pagamento em atraso não entra em campanha; campanhas em lotes pequenos por dia; mensagens personalizadas com nome e tratamento; filtro por consentimento de comunicações (LGPD).
 
+## 14.6 Agenda comercial (implementado)
+
+A agenda conversa com o CRM. **Nova consulta:** paciente (busca por nome ou telefone entre os cadastrados, ou cadastro rápido com nome e WhatsApp — se o número já existe, usa o cadastro), tipo, procedimento (já vem o interesse da negociação), data, horário, duração, **dentista** e status (agendado ou já confirmado). Valida segunda a sexta, 08h–19h, feriados e conflito com a mesma dentista (com opção de encaixe).
+
+**Status:** agendado, confirmado, compareceu, desmarcou, faltou, remarcou e cancelado (pela clínica). Cada mudança fica no histórico do paciente e gera a ação comercial:
+
+- **Desmarcou:** registra o evento e o motivo → muda o status → cria a tarefa de recuperação (dia seguinte ou data combinada) → aparece em "O que eu tenho que fazer hoje" na data → mensagem específica de remarcação ("Vi que você precisou desmarcar a avaliação do dia 05/10…").
+- **Remarcou:** atualiza a agenda, encerra a tarefa antiga e cria a confirmação da nova data.
+- **Faltou:** ação de recuperação própria ("Sentimos sua falta na consulta do dia…").
+- **Cancelado pela clínica:** motivo obrigatório e mensagem com pedido de desculpas.
+
+**Nenhuma desmarcação desaparece:** consultas não são apagadas; a recuperação é criada mesmo com regra desligada; não pode ser descartada; a rotina diária recria o que ficar sem ação.
+
+**Tela:** "Pacientes a recuperar" sempre no topo (prazo, motivo, próxima ação, Remarcar, WhatsApp com a mensagem, Abrir paciente; "sem ação" em vermelho), taxa de recuperação dos últimos 30 dias, semana de segunda a sexta com filtro por dentista (cada uma com sua cor), e o número de pacientes a recuperar ao lado de "Agenda" no menu. Na ficha do paciente, "Agendar consulta".
+
+**Dentistas:** a clínica passou a ter três dentistas (a dona e mais duas); cadastro em Configurações.
+
 ## 15. Decisões pendentes
 
 **Decidido:**
 - Item 11 confirmado (estrutura para crescer sem reescrever).
 - Dois usuários: dona (administradora) e secretária — **a secretária vê o resumo financeiro**.
 - Não há planilha: recadastro manual; cadastro separa *Novo contato* de *Paciente antigo*; termo "Novo contato" na interface.
-- Agenda: **uma profissional** (a dona da clínica); funcionamento **segunda a sexta, 08h–19h**; fechado sábado e domingo.
+- Agenda: **três dentistas** (a dona da clínica e mais duas; atualizado); funcionamento **segunda a sexta, 08h–19h**; fechado sábado e domingo.
 - Financeiro: **só contas a receber** na V1 (sem despesas).
 - Visual: **branco e dourado**; logotipo em produção (espaço reservado até lá).
 - Prazos adotados como padrão, ajustáveis em Configurações: primeiro contato em até 15 min no horário comercial; paciente inativo após 12 meses; reativação de quem desistiu após 180 dias; no máximo 1 contato ativo a cada 3 dias e 1 campanha a cada 30 dias por pessoa.

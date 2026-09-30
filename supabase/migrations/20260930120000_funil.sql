@@ -119,6 +119,17 @@ begin
       coalesce(nullif(btrim(p_acao ->> 'mensagem'), ''), s ->> 'mensagem'));
   end if;
 
+  -- Desmarcou: a ação confirmada pela usuária substitui a recuperação garantida pela
+  -- agenda (se ela recusar a ação, a recuperação garantida permanece).
+  if et.marco = 'desmarcou' and v_tarefa is not null then
+    update public.tarefas
+       set agendamento_id = (select a.id from public.agendamentos a where a.oportunidade_id = v_alvo
+                              and a.status = 'desmarcado' order by a.status_em desc limit 1)
+     where id = v_tarefa;
+    update public.tarefas set status = 'cancelada', cancelada_motivo = 'Substituída pela ação confirmada no funil'
+     where pessoa_id = op.pessoa_id and status = 'pendente' and chave_dedupe like 'rec:%';
+  end if;
+
   -- Fechou: condições de pagamento → parcelas e lembretes financeiros.
   if et.resultado = 'fechou' and vd is not null then
     v_final := (vd ->> 'valor_total_centavos')::bigint - coalesce((vd ->> 'desconto_centavos')::bigint, 0);

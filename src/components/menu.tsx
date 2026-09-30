@@ -9,7 +9,7 @@ const MENU = [
   { rotulo: "Contatos", href: "/contatos", icone: Users, pronto: true },
   { rotulo: "Funil", href: "/funil", icone: SquareKanban, pronto: true },
   { rotulo: "Campanhas", href: "/campanhas", icone: Megaphone, pronto: true },
-  { rotulo: "Agenda", href: "#", icone: CalendarDays, pronto: false },
+  { rotulo: "Agenda", href: "/agenda", icone: CalendarDays, pronto: true },
   { rotulo: "Financeiro", href: "#", icone: Wallet, pronto: false },
   { rotulo: "Configurações", href: "/configuracoes", icone: Settings, pronto: true },
 ];
@@ -27,7 +27,8 @@ export function BotaoNovoPaciente({ compacto = false }: { compacto?: boolean }) 
   );
 }
 
-export function Menu() {
+/** aRecuperar: desmarcações/faltas esperando recuperação (aparece ao lado de "Agenda"). */
+export function Menu({ aRecuperar = 0 }: { aRecuperar?: number }) {
   const caminho = usePathname();
   return (
     <nav aria-label="Menu principal" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-1 lg:flex-col">
@@ -55,6 +56,15 @@ export function Menu() {
             }`}
           >
             <Icone className="size-4" /> {rotulo}
+            {href === "/agenda" && aRecuperar > 0 && (
+              <span
+                className="ml-auto rounded-full bg-urgente px-1.5 text-[11px] leading-5 font-semibold text-white"
+                title={`${aRecuperar} ${aRecuperar === 1 ? "paciente a recuperar" : "pacientes a recuperar"}`}
+                aria-label={`${aRecuperar} a recuperar`}
+              >
+                {aRecuperar}
+              </span>
+            )}
           </Link>
         );
       })}

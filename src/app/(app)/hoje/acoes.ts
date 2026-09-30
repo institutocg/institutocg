@@ -154,6 +154,12 @@ export async function cancelarTarefa(tarefaId: string, motivo: string): Promise<
       if (rows[0].tipo === "confirmar_pagamento") {
         throw Object.assign(new Error("Lembretes de pagamento saem sozinhos quando o pagamento é registrado."), { code: "P0001" });
       }
+      if (rows[0].tipo === "recuperar_desmarcacao" || rows[0].tipo === "recuperar_falta") {
+        throw Object.assign(
+          new Error("A recuperação de uma consulta não pode ser descartada. Registre o resultado do contato (ex.: não tem interesse)."),
+          { code: "P0001" },
+        );
+      }
       await db.query(
         "update public.tarefas set status = 'cancelada', cancelada_motivo = $2 where id = $1",
         [tarefaId, `Cancelada pela usuária${motivo.trim() ? `: ${motivo.trim().slice(0, 300)}` : ""}`],

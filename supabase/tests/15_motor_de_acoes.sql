@@ -179,7 +179,7 @@ select testes.ok((select t.tipo = 'recuperar_desmarcacao' and t.prioridade = 'ur
                               and tipo = 'confirmar_agendamento' and status = 'pendente'),
   'desmarcou (dia 10): "Entrar em contato para remarcar" no dia seguinte (11) e a confirmação é cancelada');
 select public.registrar_acao((testes.pendente(testes.v('bia'))).id, 'agendou', 'ligacao', null, null, null,
-  now() + interval '8 days');
+  (testes.util(8) + time '10:00') at time zone 'America/Sao_Paulo');
 select testes.ok((select remarcado_para_id is not null from public.agendamentos where id = testes.v('ag_bia')),
   'remarcou: o agendamento desmarcado aponta para o novo (conta como recuperado)');
 

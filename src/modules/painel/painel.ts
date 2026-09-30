@@ -103,6 +103,11 @@ export interface Cartao {
   registro: TipoRegistro;
   /** "Criada pela regra …" (quando veio de uma regra de follow-up). */
   regraNome: string | null;
+  /**
+   * Pode ser recusada ("Não fazer esta ação")? Lembretes de pagamento e recuperações de
+   * desmarcação/falta não: saem ao pagar ou ao registrar o resultado do contato.
+   */
+  recusavel: boolean;
 }
 
 export interface Painel {
@@ -430,6 +435,7 @@ export function montarCartao(t: TarefaAberta, hoje: DataCivil): Cartao {
     botoes,
     registro,
     regraNome: t.regra_nome ?? null,
+    recusavel: !pagamento && t.tipo !== "recuperar_desmarcacao" && t.tipo !== "recuperar_falta",
   };
 }
 
