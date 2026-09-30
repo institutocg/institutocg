@@ -963,6 +963,32 @@ Arquivos em `supabase/migrations/` (detalhes e testes em `supabase/README.md`). 
 - **Contatos:** lista com busca por nome (sem acento), telefone ou e-mail e filtros (novos contatos, em negociação, pacientes antigos, inativos, sem próxima ação).
 - **Funil:** quadro por etapa com dias na etapa (destaque quando passa do prazo da etapa), valor estimado e próxima ação. (Arrastar cartões entre etapas fica para uma próxima etapa.)
 
+## 14.4 Funil comercial (implementado)
+
+**Etapas** (nome, cor e prazo editáveis; o papel de cada uma é fixo): Novo contato → Em contato → Avaliação agendada → Compareceu → Orçamento apresentado → Negociação / pensando · Desmarcou · Sem resposta · Reativação · Fechou · Não fechou (inclui "Desistiu", pelo motivo). "Orçamento apresentado" foi acrescentada à sugestão inicial porque "quem recebeu orçamento" é uma das perguntas centrais.
+
+**Quadro (kanban):** cartões com nome, procedimento, 1º contato, última interação, próxima ação (em vermelho se atrasada ou ausente), valor potencial (orçamento, valor fechado ou estimado) e tempo na etapa (âmbar quando passa do prazo). Arrastar entre colunas ou usar "Mover" (celular/teclado). Colunas encerradas mostram os últimos 30 dias. Filtros por nome, procedimento e responsável.
+
+**Ao mudar de etapa**, o sistema mostra a ação sugerida com explicação; a usuária confirma, **edita título, data e mensagem, ou recusa**:
+
+| Destino | Sugestão |
+|---|---|
+| Novo contato | Primeiro retorno hoje |
+| Em contato | Conduzir para a avaliação (amanhã) |
+| Avaliação agendada | Data e horário → confirmação na véspera; sem data → "combinar a data" |
+| Compareceu | Registrar o orçamento (hoje) |
+| Orçamento apresentado | Follow-up leve em 3 dias (+ valor do orçamento, opcional) |
+| Negociação / pensando | Sequência sem pressão: 4, 10 e 20 dias |
+| Desmarcou | Recuperação hoje (o agendamento é marcado como desmarcado) |
+| Sem resposta | Nova tentativa em 7 dias; no máximo 3 (7, 21, 45 dias) |
+| Reativação | Reaproximação (negociação nova ligada à anterior) |
+| Fechou | Agendar o início + **registro financeiro** (valor, desconto, entrada, parcelas, forma) → parcelas e lembretes de pagamento |
+| Não fechou | Motivo obrigatório; retomada no prazo do motivo (editável) ou nenhuma |
+
+**Sem excesso de contato:** cadências curtas que terminam numa decisão humana; a resposta do paciente interrompe a sequência; contatos de reativação respeitam intervalo mínimo desde o último contato; uma única ação pendente por negociação.
+
+**Toda ação automática é editável:** no painel e na ficha, "Editar ação" (título, data, horário, mensagem) ou "Não fazer esta ação" (com motivo). Lembretes de pagamento seguem o vencimento e saem ao registrar o pagamento.
+
 ## 15. Decisões pendentes
 
 **Decidido:**

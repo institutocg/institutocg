@@ -51,7 +51,7 @@ test("painel completo: atrasadas, urgente, importante, rotina e próximos dias",
 
   // Exemplo 1: Maria — orçamento enviado
   const maria = cartao(page, "Maria Silva");
-  await expect(maria.getByText("Facetas de porcelana")).toBeVisible();
+  await expect(maria.getByText("Facetas de porcelana", { exact: true })).toBeVisible();
   await expect(maria.getByText("Orçamento de R$ 14.000,00 enviado há 7 dias")).toBeVisible();
   await expect(maria.getByText("Ação recomendada")).toBeVisible();
   await expect(maria.getByText("Fazer follow-up hoje", { exact: false })).toBeVisible();
@@ -177,7 +177,7 @@ test("abrir paciente mostra a ficha com o histórico", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Marcos Tavares", level: 1 })).toBeVisible();
   await expect(page.getByRole("region", { name: "Interesse" }).getByText("Periodontia")).toBeVisible();
   await expect(page.getByRole("region", { name: "Funil" }).locator('[aria-current="step"]')).toHaveText("Orçamento apresentado");
-  await expect(page.getByRole("region", { name: "Histórico" }).getByText("Etapa: Avaliação realizada → Orçamento apresentado")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Histórico" }).getByText("Etapa: Compareceu → Orçamento apresentado")).toBeVisible();
   await page.getByRole("navigation", { name: "Menu principal" }).getByRole("link", { name: "Hoje" }).click();
   await expect(page).toHaveURL(/\/hoje$/);
 });

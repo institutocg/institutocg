@@ -49,7 +49,7 @@ select testes.ok(not public.eh_dia_util(testes.v('m'), '2026-10-03')
 reset role; select testes.entrar('sec@motor.local'); set role authenticated;
 
 -- =============================================================================
-\echo '— Novo contato → primeiro contato (cadência 0, 1, 2, 4 dias)'
+\echo '— Novo contato → primeiro contato (cadência 0, 1, 3 dias)'
 -- =============================================================================
 
 select testes.guardar('ana', testes.nova_pessoa('Ana Lead', '+5511910000001'));
@@ -65,14 +65,13 @@ select testes.ok((select t.passo = 2 and t.vence_em = testes.util(1) from testes
              and testes.pendentes(testes.v('ana')) = 1,
   'concluir o 1º contato agenda sozinho a 2ª tentativa para o próximo dia útil');
 select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
+select testes.ok((select t.passo = 3 and t.vence_em = testes.util(3) from testes.pendente(testes.v('ana')) t),
+  '"não respondeu" avança a cadência, com intervalos cada vez maiores');
 select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
-select testes.ok((select t.passo = 4 from testes.pendente(testes.v('ana')) t),
-  '"não respondeu" avança a cadência');
-select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
-select testes.ok((select t.tipo = 'definir_proxima_acao' and t.descricao like '%4 tentativas%'
+select testes.ok((select t.tipo = 'definir_proxima_acao' and t.descricao like '%3 tentativas%'
                   from testes.pendente(testes.v('ana')) t),
-  'cadência termina numa decisão humana (nunca insiste para sempre)');
-select testes.ok((select count(*) = 4 from public.interacoes where pessoa_id = testes.v('ana')),
+  'cadência termina numa decisão humana depois de 3 tentativas (nunca insiste para sempre)');
+select testes.ok((select count(*) = 3 from public.interacoes where pessoa_id = testes.v('ana')),
   'cada tentativa ficou no histórico de follow-ups');
 select testes.erro(
   format($$select public.registrar_acao(%L, 'feito')$$,
@@ -120,22 +119,26 @@ select testes.ok((select t.titulo = 'Ana compareceu?' from testes.pendente(teste
 select testes.entrar('sec@motor.local'); set role authenticated;
 
 update public.agendamentos set status = 'compareceu' where pessoa_id = testes.v('ana');
-select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Avaliação realizada'
+select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Compareceu'
              and (select tipo = 'apresentar_orcamento' from testes.pendente(testes.v('ana'))),
-  'compareceu: funil vai para "Avaliação realizada" e pede o registro do orçamento');
+  'compareceu: funil vai para "Compareceu" e pede o registro do orçamento');
 
 insert into public.orcamentos (clinica_id, pessoa_id, oportunidade_id, status, valor_total_centavos, apresentado_em)
 values (testes.v('m'), testes.v('ana'), testes.v('op_ana'), 'apresentado', 1500000, testes.hoje());
 select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Orçamento apresentado'
-             and (select t.tipo = 'follow_up_orcamento' and t.passo = 1 and t.vence_em = testes.util(2)
+             and (select t.tipo = 'follow_up_orcamento' and t.passo = 1 and t.vence_em = testes.util(3)
                   from testes.pendente(testes.v('ana')) t)
              and testes.pendentes(testes.v('ana')) = 1,
-  'orçamento apresentado: follow-up em 2 dias (e a tarefa de registrar orçamento sai da lista)');
+  'orçamento apresentado: follow-up leve em 3 dias (e a tarefa de registrar orçamento sai da lista)');
 
 select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'vai_pensar');
-select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Em negociação'
-             and (select vence_em = testes.util(3) from testes.pendente(testes.v('ana'))),
-  'vai pensar: funil "Em negociação" e novo contato em 3 dias');
+select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Negociação / pensando'
+             and (select tipo = 'acompanhar_decisao' and vence_em = testes.util(4) from testes.pendente(testes.v('ana'))),
+  'vai pensar: funil "Negociação / pensando" e acompanhamento sem pressão em 4 dias');
+select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'feito');
+select testes.ok((select tipo = 'acompanhar_decisao' and passo = 2 and vence_em = testes.util(10)
+                  from testes.pendente(testes.v('ana'))),
+  'sequência de acompanhamento: 2º contato 10 dias depois');
 
 select testes.erro(format($$select public.registrar_acao(%L, 'nao_fechou')$$, (testes.pendente(testes.v('ana'))).id),
   'motivo', '"não fechou" exige motivo');
@@ -191,9 +194,9 @@ select testes.ok((select t.vence_em = testes.util(20) and t.titulo like '%pediu 
 select testes.guardar('davi', testes.nova_pessoa('Davi Sumido', '+5511910000004'));
 select testes.guardar('op_davi', testes.nova_op(testes.v('davi'), 'em_contato'));
 select public.mover_etapa(testes.v('op_davi'), (select id from public.etapas_funil where clinica_id = testes.v('m') and resultado = 'sem_resposta'));
-select testes.ok((select t.tipo = 'reabrir_sem_resposta' and t.vence_em = testes.util(60) from testes.pendente(testes.v('davi')) t)
+select testes.ok((select t.tipo = 'reabrir_sem_resposta' and t.vence_em = testes.util(7) from testes.pendente(testes.v('davi')) t)
              and testes.pendentes(testes.v('davi')) = 1,
-  'sem resposta: negociação pausada e nova tentativa leve em 60 dias');
+  'sem resposta: negociação pausada e nova tentativa leve em 7 dias');
 select public.registrar_acao((testes.pendente(testes.v('davi'))).id, 'respondeu_interesse');
 select testes.ok((select status = 'aberta' from public.oportunidades where id = testes.v('op_davi'))
              and (select count(*) from public.oportunidades where pessoa_id = testes.v('davi')) = 1,
@@ -324,7 +327,10 @@ select public.criar_resgate(testes.v('jonas'));
 select testes.ok((select t.tipo = 'manutencao' and t.descricao = 'manutenção e limpeza em 01/2025'
                   and t.mensagem_sugerida like 'Olá, Jonas!%manutenção%' from testes.pendente(testes.v('jonas')) t),
   'resgate com tratamento de ciclo (limpeza): tarefa de manutenção com mensagem');
-select testes.erro($$select public.criar_resgate(testes.v('jonas'))$$, 'já existe uma tarefa de resgate',
+select testes.ok((select e.marco = 'reativacao' from public.oportunidades o join public.etapas_funil e on e.id = o.etapa_id
+                  where o.pessoa_id = testes.v('jonas') and o.status = 'aberta'),
+  'o resgate coloca o paciente na coluna "Reativação" do funil');
+select testes.erro($$select public.criar_resgate(testes.v('jonas'))$$, 'negociação em andamento',
   'não cria dois resgates para a mesma pessoa');
 select testes.guardar('kaka', testes.nova_pessoa('Kaká Sumida', '+5511910000021', 'paciente_antigo'));
 select public.criar_resgate(testes.v('kaka'));

@@ -109,13 +109,17 @@ as $$
             jsonb_array_elements_text(c.configuracoes -> 'cadencias' -> p_tipo) with ordinality as x(valor, ordem)
       where c.id = p_clinica),
     case p_tipo
-      when 'primeiro_contato'      then array[0, 1, 2, 4]
-      when 'follow_up_orcamento'   then array[2, 5, 8, 15]
-      when 'recuperar_desmarcacao' then array[0, 2, 5]
-      when 'recuperar_falta'       then array[0, 1, 4]
+      when 'primeiro_contato'      then array[0, 1, 3]
+      when 'follow_up_orcamento'   then array[3, 7, 14]
+      when 'acompanhar_decisao'    then array[4, 10, 20]
+      when 'recuperar_desmarcacao' then array[0, 3, 7]
+      when 'recuperar_falta'       then array[0, 2, 5]
+      when 'reabrir_sem_resposta'  then array[7, 21, 45]
+      when 'reativacao'            then array[0, 21]
+      when 'manutencao'            then array[0, 21]
     end,
     case when p_tipo <> 'follow_up' then public.cadencia(p_clinica, 'follow_up') end,
-    array[2, 3, 5]
+    array[2, 4, 7]
   );
 $$;
 
@@ -213,6 +217,15 @@ begin
     from public.oportunidades o left join public.procedimentos pr on pr.id = o.procedimento_id
    where o.id = p_oportunidade;
 
+  -- Contatos de reativação (que a pessoa não pediu) respeitam um intervalo mínimo
+  -- desde o último contato, para a clínica nunca parecer insistente.
+  if p_categoria = 'reativacao' and v_pessoa.ultimo_contato_em is not null then
+    p_vence := greatest(
+      p_vence,
+      (v_pessoa.ultimo_contato_em at time zone 'America/Sao_Paulo')::date
+        + public.cfg_int(v_pessoa.clinica_id, 'intervalo_min_contato_dias', 3));
+  end if;
+
   insert into public.tarefas (
     clinica_id, pessoa_id, oportunidade_id, agendamento_id, tipo, categoria, titulo, descricao,
     vence_em, prioridade, responsavel_id, origem, regra, chave_dedupe, passo, mensagem_sugerida
@@ -284,14 +297,209 @@ declare
   v_alvo  public.etapas_funil;
   v_atual int;
 begin
+  -- (atual = etapa em que a negociação está agora)
   select * into v_op from public.oportunidades where id = p_oportunidade;
-  if v_op.id is null or v_op.status <> 'aberta' then return; end if;
+  if v_op.id is null or v_op.status not in ('aberta', 'pausada') then return; end if;
   v_alvo := public.etapa_por_marco(v_op.clinica_id, p_marco);
   if v_alvo.id is null then return; end if;
   select ordem into v_atual from public.etapas_funil where id = v_op.etapa_id;
-  if v_atual < v_alvo.ordem then
+  -- Avança no fluxo; de "Desmarcou", "Reativação" ou "Sem resposta" volta para qualquer etapa.
+  if v_atual < v_alvo.ordem
+     or v_op.status = 'pausada'
+     or (select marco from public.etapas_funil where id = v_op.etapa_id) in ('desmarcou', 'reativacao') then
     perform public.mover_etapa(p_oportunidade, v_alvo.id, p_observacao);
   end if;
+end;
+$$;
+
+-- =============================================================================
+-- Sugestão de próxima ação por etapa
+--   A mesma regra serve para as automações e para a tela do funil, onde a
+--   usuária vê a sugestão, pode editar título, data e mensagem — ou recusar.
+-- =============================================================================
+
+-- Uma movimentação feita pela usuária no funil já traz a ação que ela confirmou;
+-- durante ela, os gatilhos não criam a ação automática (crm.acao_manual = on).
+create or replace function public.acao_manual()
+returns boolean
+language sql stable
+as $$ select coalesce(current_setting('crm.acao_manual', true), '') = 'on' $$;
+
+create or replace function public.sugerir_acao(
+  p_oportunidade uuid,
+  p_etapa        uuid,
+  p_motivo       uuid default null,
+  p_nova         boolean default false
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  op       public.oportunidades;
+  et       public.etapas_funil;
+  mo       public.motivos;
+  v_nome   text;
+  v_proc   text;
+  v_hoje   date;
+  v_gaps   int[];
+  v_tipo   public.tipo_tarefa;
+  v_cat    public.categoria_tarefa := 'vendas';
+  v_prio   public.prioridade_tarefa := 'normal';
+  v_titulo text;
+  v_desc   text;
+  v_vence  date;
+  v_expl   text;
+  v_requer text;
+begin
+  select * into op from public.oportunidades where id = p_oportunidade;
+  select * into et from public.etapas_funil where id = p_etapa;
+  if op.id is null or et.id is null or et.clinica_id <> op.clinica_id
+     or (auth.uid() is not null and op.clinica_id not in (select public.minhas_clinicas())) then
+    return null;
+  end if;
+  select * into mo from public.motivos where id = coalesce(p_motivo, op.motivo_id);
+  select coalesce(nullif(apelido_tratamento, ''), split_part(nome, ' ', 1)) into v_nome
+    from public.pessoas where id = op.pessoa_id;
+  select lower(nome) into v_proc from public.procedimentos where id = op.procedimento_id;
+  v_hoje := public.hoje_clinica(op.clinica_id);
+
+  case
+    when et.marco = 'novo_contato' then
+      v_tipo := 'primeiro_contato'; v_prio := 'urgente'; v_vence := v_hoje;
+      v_titulo := 'Fazer o primeiro contato com ' || v_nome;
+      v_expl := 'Primeiro retorno ainda hoje — quem recebe resposta rápida tem mais chance de agendar.';
+
+    when et.marco = 'em_contato' then
+      v_tipo := 'follow_up'; v_prio := 'alta';
+      if p_nova then
+        v_vence := v_hoje;
+        v_titulo := 'Conversar com ' || v_nome || coalesce(' sobre ' || v_proc, '');
+        v_desc := 'Demonstrou interesse' || coalesce(' em ' || v_proc, '');
+      else
+        v_vence := v_hoje + 1;
+        v_titulo := 'Conduzir ' || v_nome || ' para a avaliação';
+      end if;
+      v_expl := 'Conversa para entender o que a pessoa busca e convidar para a avaliação.';
+
+    when et.marco = 'avaliacao_agendada' then
+      v_tipo := 'confirmar_agendamento'; v_cat := 'agenda'; v_requer := 'agendamento';
+      v_titulo := 'Confirmar a avaliação de ' || v_nome;
+      v_expl := 'Informe a data e o horário: a confirmação fica marcada para a véspera (dia útil).';
+
+    when et.marco = 'avaliacao_realizada' then
+      v_tipo := 'apresentar_orcamento'; v_prio := 'alta'; v_vence := v_hoje;
+      v_titulo := 'Registrar o orçamento de ' || v_nome;
+      v_expl := 'Anote o orçamento apresentado para começar o acompanhamento.';
+
+    when et.marco = 'orcamento_apresentado' then
+      v_gaps := public.cadencia(op.clinica_id, 'follow_up_orcamento');
+      v_tipo := 'follow_up_orcamento'; v_prio := 'alta'; v_vence := v_hoje + v_gaps[1];
+      v_titulo := 'Retornar ' || v_nome || coalesce(' sobre ' || v_proc, ' sobre o orçamento');
+      v_expl := 'Um follow-up leve em ' || v_gaps[1] || ' dias, perguntando se ficou alguma dúvida. Depois, no máximo mais '
+                || (array_length(v_gaps, 1) - 1) || ' contatos espaçados.';
+
+    when et.marco = 'em_negociacao' then
+      v_gaps := public.cadencia(op.clinica_id, 'acompanhar_decisao');
+      v_tipo := 'acompanhar_decisao'; v_vence := v_hoje + v_gaps[1];
+      v_titulo := 'Acompanhar a decisão de ' || v_nome;
+      v_expl := 'Sequência de acompanhamento sem pressão: ' || array_length(v_gaps, 1) || ' contatos espaçados ('
+                || array_to_string(v_gaps, ', ') || ' dias). Se a pessoa responder, a sequência para.';
+
+    when et.marco = 'desmarcou' then
+      v_tipo := 'recuperar_desmarcacao'; v_cat := 'recuperacao'; v_prio := 'urgente'; v_vence := v_hoje;
+      v_titulo := 'Falar com ' || v_nome || ', que desmarcou';
+      v_expl := 'Contato ainda hoje, com acolhimento, para entender o motivo e oferecer um novo horário.';
+
+    when et.marco = 'reativacao' then
+      v_tipo := 'reativacao'; v_cat := 'reativacao'; v_prio := 'baixa'; v_vence := v_hoje;
+      v_titulo := 'Retomar contato com ' || v_nome;
+      v_expl := 'Mensagem de reaproximação, sem oferta agressiva. Respeita um intervalo mínimo desde o último contato.';
+
+    when et.resultado = 'fechou' then
+      v_tipo := 'agendar_tratamento'; v_prio := 'alta'; v_vence := v_hoje; v_requer := 'financeiro';
+      v_titulo := 'Agendar o início do tratamento de ' || v_nome;
+      v_desc := 'Fechou' || coalesce(' ' || v_proc, '') || '. Combine a data de início.';
+      v_expl := 'Registre as condições de pagamento: os lembretes de cada parcela são criados sozinhos.';
+
+    when et.resultado in ('nao_fechou', 'desistiu') then
+      v_requer := 'motivo';
+      v_tipo := case when et.resultado = 'desistiu' then 'reativacao' else 'retorno_por_motivo' end;
+      v_cat := case when et.resultado = 'desistiu' then 'reativacao' else 'recuperacao' end;
+      v_prio := 'baixa';
+      v_titulo := 'Retomar conversa com ' || v_nome || coalesce(' sobre ' || v_proc, '');
+      if mo.id is not null then
+        v_desc := case when et.resultado = 'desistiu' then 'Desistiu: ' else 'Não fechou: ' end || lower(mo.nome);
+        if mo.retorno_sugerido_dias is not null then
+          v_vence := coalesce(op.reabre_em, v_hoje + mo.retorno_sugerido_dias);
+          v_expl := 'A pessoa não é esquecida: um contato leve em ' || mo.retorno_sugerido_dias
+                    || ' dias (prazo sugerido para "' || lower(mo.nome) || '"). Até lá, nenhuma mensagem.';
+        else
+          v_tipo := null;
+          v_expl := 'Para "' || lower(mo.nome) || '" não há retorno programado. Você pode escolher uma data, se quiser.';
+        end if;
+      else
+        v_expl := 'Escolha o motivo: ele define quando faz sentido voltar a conversar.';
+      end if;
+
+    when et.resultado = 'sem_resposta' then
+      v_gaps := public.cadencia(op.clinica_id, 'reabrir_sem_resposta');
+      v_tipo := 'reabrir_sem_resposta'; v_cat := 'recuperacao'; v_vence := v_hoje + v_gaps[1];
+      v_titulo := 'Tentar novo contato com ' || v_nome;
+      v_desc := 'Sem resposta' || coalesce(' sobre ' || v_proc, '');
+      v_expl := 'Nova tentativa leve em ' || v_gaps[1] || ' dias; no máximo ' || array_length(v_gaps, 1)
+                || ' tentativas bem espaçadas (' || array_to_string(v_gaps, ', ') || ' dias).';
+
+    else -- etapa personalizada
+      v_tipo := 'follow_up'; v_vence := v_hoje + 2;
+      v_titulo := 'Acompanhar ' || v_nome || coalesce(' sobre ' || v_proc, '');
+      v_expl := 'Acompanhamento em 2 dias.';
+  end case;
+
+  if v_vence is not null then
+    v_vence := public.proximo_dia_util(op.clinica_id, greatest(v_vence, v_hoje));
+  end if;
+
+  return jsonb_build_object(
+    'tipo', v_tipo,
+    'categoria', v_cat,
+    'prioridade', v_prio,
+    'titulo', v_titulo,
+    'descricao', v_desc,
+    'vence_em', v_vence,
+    'explicacao', v_expl,
+    'requer', v_requer,
+    'mensagem', case when v_tipo is not null
+                     then public.renderizar_mensagem(op.clinica_id, v_tipo::text, op.pessoa_id, v_proc) end
+  );
+end;
+$$;
+
+-- Cria a ação sugerida para a etapa atual da negociação (usada pelos gatilhos).
+create or replace function public.aplicar_sugestao(
+  p_oportunidade uuid,
+  p_regra        text,
+  p_nova         boolean default false
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  s jsonb;
+begin
+  s := public.sugerir_acao(p_oportunidade, (select etapa_id from public.oportunidades where id = p_oportunidade),
+                           null, p_nova);
+  if s is null or s ->> 'tipo' is null or s ->> 'vence_em' is null or s ->> 'requer' = 'agendamento' then
+    return null;
+  end if;
+  return public.definir_proxima_acao(
+    p_oportunidade, (s ->> 'tipo')::public.tipo_tarefa, s ->> 'titulo', (s ->> 'vence_em')::date,
+    (s ->> 'prioridade')::public.prioridade_tarefa, p_regra, 1, s ->> 'descricao',
+    (s ->> 'categoria')::public.categoria_tarefa);
 end;
 $$;
 
@@ -306,28 +514,9 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_pessoa public.pessoas;
-  v_proc   text;
-  v_marco  text;
 begin
-  if new.status <> 'aberta' then return null; end if;
-  select * into v_pessoa from public.pessoas where id = new.pessoa_id;
-  select nome into v_proc from public.procedimentos where id = new.procedimento_id;
-  select marco into v_marco from public.etapas_funil where id = new.etapa_id;
-
-  if v_marco = 'novo_contato' then
-    perform public.criar_tarefa_auto(
-      new.pessoa_id, new.id, 'primeiro_contato', 'vendas',
-      'Fazer o primeiro contato com ' || split_part(v_pessoa.nome, ' ', 1),
-      public.hoje_clinica(new.clinica_id), 'urgente', 'R-LEAD-01', 'op:' || new.id);
-  else
-    perform public.criar_tarefa_auto(
-      new.pessoa_id, new.id, 'follow_up', 'vendas',
-      'Conversar com ' || split_part(v_pessoa.nome, ' ', 1)
-        || coalesce(' sobre ' || lower(v_proc), ''),
-      public.hoje_clinica(new.clinica_id), 'alta', 'R-LEAD-02', 'op:' || new.id);
-  end if;
+  if new.status <> 'aberta' or public.acao_manual() then return null; end if;
+  perform public.aplicar_sugestao(new.id, 'R-LEAD-01', true);
   return null;
 end;
 $$;
@@ -343,45 +532,10 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_nome   text;
-  v_proc   text;
-  v_motivo public.motivos;
-  v_hoje   date := public.hoje_clinica(new.clinica_id);
 begin
-  if new.status is not distinct from old.status then return null; end if;
-  select split_part(nome, ' ', 1) into v_nome from public.pessoas where id = new.pessoa_id;
-  select lower(nome) into v_proc from public.procedimentos where id = new.procedimento_id;
-  select * into v_motivo from public.motivos where id = new.motivo_id;
-
-  if new.status = 'ganha' then
-    perform public.criar_tarefa_auto(
-      new.pessoa_id, new.id, 'agendar_tratamento', 'vendas',
-      'Agendar o início do tratamento de ' || v_nome,
-      v_hoje, 'alta', 'R-OP-01', 'op:' || new.id,
-      p_descricao => 'Fechou' || coalesce(' ' || v_proc, '') || '. Registre as condições de pagamento e combine a data de início.');
-
-  elsif new.resultado = 'nao_fechou' and v_motivo.retorno_sugerido_dias is not null then
-    perform public.criar_tarefa_auto(
-      new.pessoa_id, new.id, 'retorno_por_motivo', 'recuperacao',
-      'Retomar conversa com ' || v_nome || coalesce(' sobre ' || v_proc, ''),
-      coalesce(new.reabre_em, v_hoje + v_motivo.retorno_sugerido_dias), 'normal', 'R-OP-02', 'op:' || new.id,
-      p_descricao => 'Não fechou: ' || lower(v_motivo.nome));
-
-  elsif new.resultado = 'desistiu' and coalesce(v_motivo.retorno_sugerido_dias, 0) > 0 then
-    perform public.criar_tarefa_auto(
-      new.pessoa_id, new.id, 'reativacao', 'reativacao',
-      'Reativar contato com ' || v_nome,
-      coalesce(new.reabre_em, v_hoje + v_motivo.retorno_sugerido_dias), 'baixa', 'R-OP-03', 'op:' || new.id,
-      p_descricao => 'Desistiu: ' || lower(v_motivo.nome));
-
-  elsif new.status = 'pausada' then
-    perform public.criar_tarefa_auto(
-      new.pessoa_id, new.id, 'reabrir_sem_resposta', 'recuperacao',
-      'Tentar novo contato com ' || v_nome,
-      coalesce(new.reabre_em, v_hoje + public.cfg_int(new.clinica_id, 'dias_reabrir_sem_resposta', 60)),
-      'normal', 'R-OP-04', 'op:' || new.id,
-      p_descricao => 'Sem resposta' || coalesce(' sobre ' || v_proc, ''));
+  if new.status is not distinct from old.status or public.acao_manual() then return null; end if;
+  if new.status in ('ganha', 'perdida', 'pausada') then
+    perform public.aplicar_sugestao(new.id, 'R-OP-01');
   end if;
   return null;
 end;
@@ -468,6 +622,15 @@ begin
   -- Qualquer outro desfecho encerra a confirmação pendente.
   update public.tarefas set status = 'cancelada', cancelada_motivo = 'Agendamento ' || new.status::text
    where chave_dedupe = 'ag:' || new.id and status = 'pendente';
+
+  -- Desmarcou/faltou: o cartão vai para "Desmarcou" no funil.
+  if new.status in ('desmarcado', 'faltou') and new.oportunidade_id is not null
+     and (select status from public.oportunidades where id = new.oportunidade_id) = 'aberta' then
+    perform public.mover_etapa(new.oportunidade_id, (public.etapa_por_marco(new.clinica_id, 'desmarcou')).id,
+      case when new.status = 'faltou' then 'Faltou ao agendamento' else 'Desmarcou o agendamento' end);
+  end if;
+  -- Movimentação manual no funil: a usuária já definiu a próxima ação.
+  if public.acao_manual() then return null; end if;
 
   if new.status = 'desmarcado' then
     update public.tarefas set status = 'cancelada', cancelada_motivo = 'Substituída pela recuperação'
@@ -579,6 +742,8 @@ create or replace function public.registrar_acao(
 )
 returns jsonb
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   t         public.tarefas;
@@ -597,7 +762,8 @@ declare
   v_nova    uuid;
 begin
   select * into t from public.tarefas where id = p_tarefa for update;
-  if t.id is null then
+  -- Roda com privilégios do sistema: confere se a tarefa é da clínica de quem chama.
+  if t.id is null or (auth.uid() is not null and t.clinica_id not in (select public.minhas_clinicas())) then
     raise exception 'Tarefa não encontrada.' using errcode = 'P0002';
   end if;
   if t.status <> 'pendente' then
@@ -708,8 +874,9 @@ begin
     when 'feito', 'nao_respondeu' then
       if t.tipo = 'confirmar_agendamento' and p_resultado = 'feito' then
         update public.agendamentos set status = 'confirmado' where id = t.agendamento_id;
-      elsif t.tipo in ('primeiro_contato', 'follow_up', 'follow_up_orcamento', 'recuperar_desmarcacao',
-                       'recuperar_falta', 'confirmar_agendamento') then
+      elsif t.tipo in ('primeiro_contato', 'follow_up', 'follow_up_orcamento', 'acompanhar_decisao',
+                       'recuperar_desmarcacao', 'recuperar_falta', 'reabrir_sem_resposta', 'reativacao',
+                       'manutencao', 'confirmar_agendamento') then
         v_cadencia := case when t.tipo = 'confirmar_agendamento' then 'follow_up' else t.tipo::text end;
         v_gaps := public.cadencia(t.clinica_id, v_cadencia);
         if t.tipo = 'confirmar_agendamento' then
@@ -732,7 +899,7 @@ begin
                         v_hoje + greatest(v_gaps[t.passo + 1], 1), t.prioridade, 'R-CAD-01', t.chave_dedupe,
                         t.passo + 1, t.descricao, t.agendamento_id);
           end if;
-        elsif v_op.id is not null and v_op.status = 'aberta' then
+        elsif v_op.id is not null and v_op.status in ('aberta', 'pausada') then
           v_prox := public.definir_proxima_acao(v_op.id, 'definir_proxima_acao',
                       'Decidir o próximo passo com ' || v_nome,
                       v_hoje + 2, 'normal', 'R-CAD-02', 1,
@@ -744,7 +911,7 @@ begin
       end if;
 
     when 'respondeu_interesse' then
-      if v_marco = 'novo_contato' then
+      if v_marco in ('novo_contato', 'desmarcou', 'reativacao') then
         perform public.avancar_para_marco(v_op.id, 'em_contato', 'Respondeu com interesse');
       end if;
       v_prox := public.definir_proxima_acao(v_op.id, 'follow_up',
@@ -768,12 +935,12 @@ begin
       select id into v_prox from public.tarefas where chave_dedupe = 'ag:' || v_ag and status = 'pendente';
 
     when 'vai_pensar' then
-      if v_marco = 'orcamento_apresentado' then
-        perform public.avancar_para_marco(v_op.id, 'em_negociacao', 'Ficou de pensar');
-      end if;
-      v_prox := public.definir_proxima_acao(v_op.id, 'follow_up',
-                  'Retomar a conversa com ' || v_nome || ' (ficou de pensar)',
-                  coalesce(p_data, v_hoje + 3), 'alta', 'R-RES-02');
+      -- Começa a sequência de acompanhamento (espaçada e sem pressão).
+      perform public.avancar_para_marco(v_op.id, 'em_negociacao', 'Ficou de pensar');
+      v_gaps := public.cadencia(t.clinica_id, 'acompanhar_decisao');
+      v_prox := public.definir_proxima_acao(v_op.id, 'acompanhar_decisao',
+                  'Acompanhar a decisão de ' || v_nome,
+                  coalesce(p_data, v_hoje + v_gaps[1]), 'normal', 'R-RES-02', 1, 'Ficou de pensar');
 
     when 'pediu_retorno' then
       v_prox := public.definir_proxima_acao(v_op.id, 'follow_up',
@@ -871,6 +1038,50 @@ $$;
 -- 3. Rotina diária
 -- =============================================================================
 
+-- Abre uma negociação na etapa "Reativação" com a tarefa de contato.
+-- Retorna o id da tarefa (ou null se a pessoa não aceita contato / já negocia).
+create or replace function public.abrir_reativacao(
+  p_pessoa       uuid,
+  p_origem       uuid,
+  p_procedimento uuid,
+  p_tipo         public.tipo_tarefa,
+  p_titulo       text,
+  p_descricao    text,
+  p_vence        date,
+  p_regra        text,
+  p_mensagem     text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pessoa public.pessoas;
+  v_op     uuid;
+  v_antes  text := coalesce(current_setting('crm.acao_manual', true), '');
+begin
+  select * into v_pessoa from public.pessoas where id = p_pessoa;
+  if v_pessoa.id is null or v_pessoa.nao_contatar or not v_pessoa.consentimento_contato
+     or v_pessoa.arquivado_em is not null
+     or exists (select 1 from public.oportunidades where pessoa_id = p_pessoa and status in ('aberta', 'pausada')) then
+    return null;
+  end if;
+
+  -- A tarefa é criada abaixo, com o texto certo; a sugestão genérica fica de fora.
+  perform set_config('crm.acao_manual', 'on', true);
+  insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, origem_id, etapa_id,
+                                    oportunidade_origem_id, responsavel_id)
+  values (v_pessoa.clinica_id, p_pessoa, p_procedimento, v_pessoa.origem_id,
+          (public.etapa_por_marco(v_pessoa.clinica_id, 'reativacao')).id, p_origem, v_pessoa.responsavel_id)
+  returning id into v_op;
+  perform set_config('crm.acao_manual', v_antes, true);
+
+  return public.criar_tarefa_auto(p_pessoa, v_op, p_tipo, 'reativacao', p_titulo, p_vence, 'baixa', p_regra,
+                                  'op:' || v_op, 1, p_descricao, null, p_mensagem);
+end;
+$$;
+
 create table public.execucoes_rotina (
   clinica_id    uuid not null references public.clinicas (id),
   dia           date not null,
@@ -899,6 +1110,8 @@ declare
   v_sentinela  int := 0;
   v_reativ     int := 0;
   v_manut      int := 0;
+  v_retornos   int := 0;
+  v_nova       uuid;
   r            record;
 begin
   if auth.uid() is not null and p_clinica not in (select public.minhas_clinicas()) then
@@ -946,11 +1159,33 @@ begin
     end if;
   end loop;
 
+  -- Retornos combinados (não fechou / desistiu) que chegaram na data: a pessoa passa
+  -- para a coluna "Reativação" numa nova negociação, com a mesma tarefa (que a
+  -- usuária pode ter ajustado).
+  for r in
+    select t.id as tarefa_id, t.pessoa_id, o.id as op_id, o.procedimento_id, o.origem_id, o.responsavel_id
+      from public.tarefas t
+      join public.oportunidades o on o.id = t.oportunidade_id
+     where t.clinica_id = p_clinica and t.status = 'pendente' and o.status = 'perdida'
+       and t.tipo in ('retorno_por_motivo', 'reativacao') and t.vence_em <= v_hoje
+       and not exists (select 1 from public.oportunidades x where x.pessoa_id = t.pessoa_id and x.status in ('aberta', 'pausada'))
+  loop
+    perform set_config('crm.acao_manual', 'on', true);
+    insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, origem_id, etapa_id,
+                                      oportunidade_origem_id, responsavel_id)
+    values (p_clinica, r.pessoa_id, r.procedimento_id, r.origem_id,
+            (public.etapa_por_marco(p_clinica, 'reativacao')).id, r.op_id, r.responsavel_id)
+    returning id into v_nova;
+    perform set_config('crm.acao_manual', '', true);
+    update public.tarefas set oportunidade_id = v_nova, chave_dedupe = 'op:' || v_nova where id = r.tarefa_id;
+    v_retornos := v_retornos + 1;
+  end loop;
+
   -- Reativação e manutenção: somente quando ligadas (desligadas durante o recadastramento).
   if coalesce((v_cfg ->> 'reativacao_automatica')::boolean, false) then
     -- Manutenção devida (procedimento com ciclo de retorno).
     for r in
-      select distinct on (p.id) p.id, split_part(p.nome, ' ', 1) as nome, pr.nome as proc, ta.realizado_em
+      select distinct on (p.id) p.id, split_part(p.nome, ' ', 1) as nome, pr.id as proc_id, pr.nome as proc, ta.realizado_em
         from public.pessoas p
         join public.tratamentos_anteriores ta on ta.pessoa_id = p.id
         join public.procedimentos pr on pr.id = ta.procedimento_id and pr.ciclo_retorno_meses is not null
@@ -964,10 +1199,9 @@ begin
        order by p.id, ta.realizado_em desc
        limit v_limite
     loop
-      if public.criar_tarefa_auto(r.id, null, 'manutencao', 'reativacao',
-           'Lembrar ' || r.nome || ' da manutenção', v_hoje, 'baixa', 'R-DIA-02', 'pessoa:' || r.id,
-           p_descricao => lower(r.proc) || ' em ' || to_char(r.realizado_em, 'MM/YYYY'),
-           p_mensagem => public.renderizar_mensagem(p_clinica, 'manutencao', r.id, r.proc)) is not null then
+      if public.abrir_reativacao(r.id, null, r.proc_id, 'manutencao',
+           'Lembrar ' || r.nome || ' da manutenção', lower(r.proc) || ' em ' || to_char(r.realizado_em, 'MM/YYYY'),
+           v_hoje, 'R-DIA-02', public.renderizar_mensagem(p_clinica, 'manutencao', r.id, r.proc)) is not null then
         v_manut := v_manut + 1;
       end if;
     end loop;
@@ -985,10 +1219,11 @@ begin
        order by c.ultimo_atendimento_em nulls first
        limit greatest(v_limite - v_manut, 0)
     loop
-      if public.criar_tarefa_auto(r.id, null, 'reativacao', 'reativacao',
-           'Reativar contato com ' || r.nome, v_hoje, 'baixa', 'R-DIA-03', 'pessoa:' || r.id,
-           p_descricao => case when r.ultimo_atendimento_em is null then 'Paciente antigo sem atendimento recente'
-                               else 'Último atendimento em ' || to_char(r.ultimo_atendimento_em, 'MM/YYYY') end) is not null then
+      if public.abrir_reativacao(r.id, null, null, 'reativacao',
+           'Reativar contato com ' || r.nome,
+           case when r.ultimo_atendimento_em is null then 'Paciente antigo sem atendimento recente'
+                else 'Último atendimento em ' || to_char(r.ultimo_atendimento_em, 'MM/YYYY') end,
+           v_hoje, 'R-DIA-03') is not null then
         v_reativ := v_reativ + 1;
       end if;
     end loop;
@@ -996,11 +1231,11 @@ begin
 
   update public.execucoes_rotina
      set resumo = jsonb_build_object('orcamentos_expirados', v_expirados, 'proximas_acoes_criadas', v_sentinela,
-                                     'manutencoes', v_manut, 'reativacoes', v_reativ)
+                                     'manutencoes', v_manut, 'reativacoes', v_reativ, 'retornos', v_retornos)
    where clinica_id = p_clinica and dia = v_hoje;
 
   return jsonb_build_object('orcamentos_expirados', v_expirados, 'proximas_acoes_criadas', v_sentinela,
-                            'manutencoes', v_manut, 'reativacoes', v_reativ);
+                            'manutencoes', v_manut, 'reativacoes', v_reativ, 'retornos', v_retornos);
 end;
 $$;
 

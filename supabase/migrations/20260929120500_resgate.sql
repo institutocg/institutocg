@@ -9,6 +9,8 @@
 create or replace function public.criar_resgate(p_pessoa uuid)
 returns uuid
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   v_pessoa public.pessoas;
@@ -16,9 +18,8 @@ declare
   v_trat   record;
   v_id     uuid;
 begin
-  -- Leitura com RLS: só encontra pessoas da própria clínica.
   select * into v_pessoa from public.pessoas where id = p_pessoa;
-  if v_pessoa.id is null then
+  if v_pessoa.id is null or (auth.uid() is not null and v_pessoa.clinica_id not in (select public.minhas_clinicas())) then
     raise exception 'Cadastro não encontrado.' using errcode = 'P0002';
   end if;
   if v_pessoa.nao_contatar or not v_pessoa.consentimento_contato or v_pessoa.arquivado_em is not null then
@@ -27,33 +28,30 @@ begin
   if exists (select 1 from public.oportunidades where pessoa_id = p_pessoa and status in ('aberta', 'pausada')) then
     raise exception 'Já existe uma negociação em andamento; use a próxima ação dela.' using errcode = 'P0001';
   end if;
-  if exists (select 1 from public.tarefas where chave_dedupe = 'pessoa:' || p_pessoa and status = 'pendente') then
-    raise exception 'Já existe uma tarefa de resgate pendente para esta pessoa.' using errcode = 'P0001';
-  end if;
 
   v_hoje := public.hoje_clinica(v_pessoa.clinica_id);
 
   -- Tratamento anterior com ciclo de retorno (o mais recente).
-  select pr.nome, ta.realizado_em into v_trat
+  select pr.id, pr.nome, ta.realizado_em into v_trat
     from public.tratamentos_anteriores ta
     join public.procedimentos pr on pr.id = ta.procedimento_id and pr.ciclo_retorno_meses is not null
    where ta.pessoa_id = p_pessoa
    order by ta.realizado_em desc nulls last
    limit 1;
 
+  -- O resgate abre uma negociação na coluna "Reativação" do funil.
   if v_trat.nome is not null then
-    v_id := public.criar_tarefa_auto(
-      p_pessoa, null, 'manutencao', 'reativacao',
-      'Lembrar ' || split_part(v_pessoa.nome, ' ', 1) || ' da manutenção', v_hoje, 'normal', 'R-RES-10',
-      'pessoa:' || p_pessoa,
-      p_descricao => lower(v_trat.nome) || coalesce(' em ' || to_char(v_trat.realizado_em, 'MM/YYYY'), ''),
-      p_mensagem => public.renderizar_mensagem(v_pessoa.clinica_id, 'manutencao', p_pessoa, v_trat.nome));
+    v_id := public.abrir_reativacao(
+      p_pessoa, null, v_trat.id, 'manutencao',
+      'Lembrar ' || split_part(v_pessoa.nome, ' ', 1) || ' da manutenção',
+      lower(v_trat.nome) || coalesce(' em ' || to_char(v_trat.realizado_em, 'MM/YYYY'), ''),
+      v_hoje, 'R-RES-10', public.renderizar_mensagem(v_pessoa.clinica_id, 'manutencao', p_pessoa, v_trat.nome));
   else
-    v_id := public.criar_tarefa_auto(
-      p_pessoa, null, 'reativacao', 'reativacao',
-      'Reativar contato com ' || split_part(v_pessoa.nome, ' ', 1), v_hoje, 'normal', 'R-RES-11',
-      'pessoa:' || p_pessoa,
-      p_descricao => 'Paciente antigo' || coalesce(', último atendimento em ' || to_char(v_pessoa.ultimo_atendimento_informado, 'MM/YYYY'), ''));
+    v_id := public.abrir_reativacao(
+      p_pessoa, null, null, 'reativacao',
+      'Reativar contato com ' || split_part(v_pessoa.nome, ' ', 1),
+      'Paciente antigo' || coalesce(', último atendimento em ' || to_char(v_pessoa.ultimo_atendimento_informado, 'MM/YYYY'), ''),
+      v_hoje, 'R-RES-11');
   end if;
   return v_id;
 end;

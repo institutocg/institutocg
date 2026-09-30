@@ -33,7 +33,7 @@ export function Dialogo({
       aria-labelledby={idTitulo}
       onClose={aoFechar}
       onClick={(e) => e.target === ref.current && aoFechar()}
-      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-borda bg-superficie p-0 text-grafite shadow-2xl"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-borda bg-superficie p-0 text-grafite shadow-2xl"
     >
       {aberto && (
         <div className="p-6">

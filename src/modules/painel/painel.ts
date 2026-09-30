@@ -18,6 +18,7 @@ export type TipoTarefa =
   | "manutencao"
   | "confirmar_pagamento"
   | "apresentar_orcamento"
+  | "acompanhar_decisao"
   | "agendar_tratamento"
   | "definir_proxima_acao"
   | "personalizada";
@@ -76,6 +77,9 @@ export interface Cartao {
   parcelaId: string | null;
   grupo: Grupo;
   pagamento: boolean;
+  /** Título da tarefa como está gravado (editável pela usuária). */
+  tituloTarefa: string;
+  horario: string | null;
   /** Linha principal: nome da pessoa (ou "Pagamento previsto hoje" nos pagamentos). */
   titulo: string;
   /** Linha secundária dos pagamentos: "Maria Silva — R$ 2.500,00". */
@@ -137,6 +141,7 @@ export function classificar(t: TarefaAberta, hoje: DataCivil): Grupo {
       if (t.regra === "R-RES-03") return "urgente"; // pediu retorno para hoje
       return "importante";
     case "follow_up_orcamento":
+    case "acompanhar_decisao":
     case "retorno_por_motivo":
     case "reabrir_sem_resposta":
     case "apresentar_orcamento":
@@ -251,6 +256,10 @@ export function motivoDoContato(t: TarefaAberta, hoje: DataCivil): string {
       const venc = t.parcela_vencimento ?? t.vence_em;
       return `${parcela} · vencimento ${ddmm(venc)}`;
     }
+    case "acompanhar_decisao": {
+      const base = t.descricao ?? "Está pensando";
+      return t.orcamento_valor_centavos ? `${base} — orçamento de ${formatarMoeda(t.orcamento_valor_centavos)}` : base;
+    }
     case "agendar_tratamento":
       return "Fechou o tratamento";
     case "apresentar_orcamento":
@@ -289,6 +298,10 @@ export function acaoRecomendada(t: TarefaAberta, hoje: DataCivil): string {
       return t.passo >= 3
         ? "Fazer follow-up hoje e oferecer uma conversa com a doutora para tirar dúvidas."
         : "Fazer follow-up hoje: perguntar se ficou alguma dúvida sobre o orçamento.";
+    case "acompanhar_decisao":
+      if (t.passo >= 3) return "Último contato da sequência: deixar a porta aberta, com gentileza.";
+      if (t.passo === 2) return "Oferecer uma conversa com a doutora para esclarecer dúvidas, sem pressa.";
+      return "Acompanhar com leveza: perguntar se ficou alguma dúvida, sem pressionar.";
     case "recuperar_desmarcacao":
       return "Entrar em contato para entender se deseja remarcar.";
     case "recuperar_falta":
@@ -382,6 +395,8 @@ export function montarCartao(t: TarefaAberta, hoje: DataCivil): Cartao {
     parcelaId: t.parcela_id,
     grupo: classificar(t, hoje),
     pagamento,
+    tituloTarefa: t.titulo,
+    horario: t.horario,
     titulo,
     subtitulo,
     procedimento: t.procedimento,

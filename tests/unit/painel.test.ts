@@ -59,6 +59,7 @@ describe("classificação por prioridade", () => {
     ["confirmar_pagamento", { vence_em: "2026-09-25" }, "urgente"], // pagamento atrasado
     ["confirmar_pagamento", {}, "importante"], // pagamento do dia
     ["follow_up_orcamento", {}, "importante"],
+    ["acompanhar_decisao", {}, "importante"], // está pensando
     ["follow_up", { regra: "R-RES-01" }, "importante"], // demonstrou interesse
     ["follow_up", {}, "importante"],
     ["retorno_por_motivo", {}, "importante"],
@@ -160,7 +161,7 @@ describe("textos do cartão", () => {
       "primeiro_contato", "follow_up", "follow_up_orcamento", "confirmar_agendamento",
       "recuperar_desmarcacao", "recuperar_falta", "reabrir_sem_resposta", "retorno_por_motivo",
       "reativacao", "manutencao", "confirmar_pagamento", "apresentar_orcamento",
-      "agendar_tratamento", "definir_proxima_acao", "personalizada",
+      "agendar_tratamento", "definir_proxima_acao", "personalizada", "acompanhar_decisao",
     ];
     for (const tipo of tipos) {
       const t = tarefa({ tipo, descricao: tipo === "reativacao" ? "Último atendimento em 02/2025" : null });
@@ -173,6 +174,14 @@ describe("textos do cartão", () => {
     const t = tarefa({ tipo: "follow_up", regra: "R-RES-03" });
     expect(acaoRecomendada(t, HOJE)).toBe("Retornar hoje, como combinado.");
     expect(acaoRecomendada({ ...t, vence_em: "2026-10-05" }, HOJE)).toBe("Retornar na data combinada.");
+  });
+
+  it("quem está pensando recebe acompanhamento leve, que muda a cada contato", () => {
+    const t = tarefa({ tipo: "acompanhar_decisao", descricao: "Ficou de pensar", orcamento_valor_centavos: 900_000 });
+    expect(motivoDoContato(t, HOJE)).toBe("Ficou de pensar — orçamento de R$ 9.000,00");
+    expect(acaoRecomendada(t, HOJE)).toContain("sem pressionar");
+    expect(acaoRecomendada({ ...t, passo: 2 }, HOJE)).toContain("conversa com a doutora");
+    expect(acaoRecomendada({ ...t, passo: 3 }, HOJE)).toContain("porta aberta");
   });
 
   it("'compareceu?' pede o registro de comparecimento", () => {

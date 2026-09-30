@@ -11,30 +11,32 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260929120200_financeiro.sql` | Orçamentos + itens, vendas, parcelas, pagamentos e lembretes financeiros automáticos |
 | `20260929120300_visoes_e_inicializacao.sql` | Visões de leitura (`v_contatos`, `v_painel_tarefas`, `v_parcelas`, `v_pendencias_financeiras`, `v_resumo_financeiro_mensal`, `v_funil`) e `inicializar_clinica()` |
 | `20260929120400_motor_de_acoes.sql` | **Motor de ações**: calendário (dias úteis e feriados), cadências, gatilhos que criam tarefas, `registrar_acao()`, `marcar_parcela_paga()`, rotina diária `preparar_dia()` e a visão `v_tarefas_abertas` usada pelo painel |
+| `20260930120000_funil.sql` | `mover_etapa_manual()` (mudança de etapa com a ação confirmada/editada pela usuária, agendamento, fechamento com parcelas) e proteção das funções internas do motor |
 | `20260929120500_resgate.sql` | `criar_resgate()` (tarefa de manutenção/reativação sob demanda para paciente antigo) e `sem_acento()` para a busca |
 
 ## Motor de ações — quando o sistema cria tarefas sozinho
 
 | Situação | Ação criada |
 |---|---|
-| Novo contato cadastrado | Primeiro contato, hoje, urgente (cadência 0 → 1 → 2 → 4 dias) |
+| Novo contato cadastrado | Primeiro contato, hoje, urgente (cadência 0 → 1 → 3 dias) |
 | Paciente antigo com interesse | "Conversar com X sobre Y", hoje |
 | Agendamento criado | Confirmação na véspera útil; funil vai para "Avaliação agendada" |
 | Confirmação sem resposta | Nova tentativa no dia da consulta |
 | Consulta passou sem registro | "X compareceu?" (rotina diária) |
-| Desmarcou / faltou | Recuperação urgente, hoje (cadência 0 → 2 → 5 / 0 → 1 → 4 dias) |
+| Desmarcou / faltou | Cartão vai para "Desmarcou"; recuperação urgente, hoje (cadência 0 → 3 → 7 / 0 → 2 → 5 dias) |
 | Compareceu à avaliação | "Registrar o orçamento"; funil "Avaliação realizada" |
-| Orçamento apresentado | Follow-up em 2 dias (cadência 2 → 5 → 8 → 15 dias) |
-| Vai pensar / pediu retorno / respondeu | Próximo contato em 3 dias / na data combinada / amanhã |
-| Não fechou | Retomar no prazo do motivo (ex.: valor alto = 30 dias) |
+| Orçamento apresentado | Follow-up leve em 3 dias (cadência 3 → 7 → 14 dias) |
+| Vai pensar | Etapa "Negociação / pensando" e acompanhamento sem pressão (4 → 10 → 20 dias) |
+| Pediu retorno / respondeu | Na data combinada / amanhã |
+| Não fechou | Retomar no prazo do motivo (ex.: valor alto = 30 dias); na data, a pessoa aparece na coluna "Reativação" |
 | Desistiu | Reativação no prazo do motivo |
-| Sem resposta (cadência esgotada) | Decisão humana; se pausada, nova tentativa em 60 dias |
+| Sem resposta | Tentativas leves e espaçadas (7 → 21 → 45 dias) e depois decisão humana |
 | Fechou | "Agendar o início do tratamento" |
 | Parcela em aberto | Lembrete na data prevista; em atraso aparece como urgente |
-| Paciente antigo inativo / manutenção devida | Reativação (somente com a reativação ligada; limite diário) |
+| Paciente antigo inativo / manutenção devida | Nova negociação na coluna "Reativação" (somente com a reativação ligada; limite diário; intervalo mínimo desde o último contato) |
 | Não quer mais contato | Nenhuma tarefa, nunca (exceto lembretes financeiros) |
 
-Nenhuma cadência se estende para sempre: a última tentativa vira "Decidir o próximo passo". Datas caem sempre em dia útil (seg–sex, sem feriados).
+Mudanças de etapa feitas no funil usam a mesma sugestão (`sugerir_acao()`), mas a usuária confirma, edita (título, data, mensagem) ou recusa antes de salvar. Nenhuma cadência se estende para sempre: a última tentativa vira "Decidir o próximo passo". Datas caem sempre em dia útil (seg–sex, sem feriados).
 
 ## Onde está cada requisito
 

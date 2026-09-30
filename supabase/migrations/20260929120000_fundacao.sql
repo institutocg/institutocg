@@ -205,9 +205,11 @@ create table public.etapas_funil (
   tipo           public.tipo_etapa not null default 'aberta',
   resultado      public.resultado_oportunidade,
   -- Papel da etapa nas automações (o nome pode ser mudado à vontade).
+  -- desmarcou e reativacao são etapas "fora do fluxo": dali a pessoa pode voltar
+  -- para qualquer etapa (ex.: reagendou → Avaliação agendada).
   marco          text check (marco in (
-                   'novo_contato', 'em_contato', 'avaliacao_agendada',
-                   'avaliacao_realizada', 'orcamento_apresentado', 'em_negociacao')),
+                   'novo_contato', 'em_contato', 'avaliacao_agendada', 'avaliacao_realizada',
+                   'orcamento_apresentado', 'em_negociacao', 'desmarcou', 'reativacao')),
   sla_dias       int check (sla_dias >= 0),
   cor            text not null default '#B08D57' check (cor ~ '^#[0-9A-Fa-f]{6}$'),
   ativo          boolean not null default true,

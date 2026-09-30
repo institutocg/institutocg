@@ -240,14 +240,21 @@ begin
     'limite_reativacao_dia', 10,
     'validade_orcamento_dias', 30,
     -- Intervalos (em dias) entre as tentativas de cada cadência de contato.
+    -- Cadências curtas e espaçadas: acompanhamento, não pressão. A última
+    -- tentativa sempre termina numa decisão da usuária.
     'cadencias', jsonb_build_object(
-      'primeiro_contato',      jsonb_build_array(0, 1, 2, 4),
-      'follow_up_orcamento',   jsonb_build_array(2, 5, 8, 15),
-      'recuperar_desmarcacao', jsonb_build_array(0, 2, 5),
-      'recuperar_falta',       jsonb_build_array(0, 1, 4),
-      'follow_up',             jsonb_build_array(2, 3, 5)
+      'primeiro_contato',      jsonb_build_array(0, 1, 3),
+      'follow_up_orcamento',   jsonb_build_array(3, 7, 14),
+      'acompanhar_decisao',    jsonb_build_array(4, 10, 20),
+      'recuperar_desmarcacao', jsonb_build_array(0, 3, 7),
+      'recuperar_falta',       jsonb_build_array(0, 2, 5),
+      'reabrir_sem_resposta',  jsonb_build_array(7, 21, 45),
+      'reativacao',            jsonb_build_array(0, 21),
+      'manutencao',            jsonb_build_array(0, 21),
+      'follow_up',             jsonb_build_array(2, 4, 7)
     ),
-    'dias_reabrir_sem_resposta', 60
+    -- Quantos dias as negociações encerradas (Fechou / Não fechou) ficam visíveis no funil.
+    'dias_encerradas_no_funil', 30
   ))
   returning id into c;
 
@@ -276,17 +283,20 @@ begin
     (c, 'Paciente antigo',             'interno',   10),
     (c, 'Outro',                       'organico',  99);
 
+  -- Etapas editáveis (nome, cor, prazo). O "marco"/"resultado" diz ao sistema o papel de cada uma.
   insert into public.etapas_funil (clinica_id, nome, ordem, tipo, resultado, marco, sla_dias, cor) values
-    (c, 'Novo contato',          1,  'aberta', null,           'novo_contato',          0,    '#C9A96E'),
-    (c, 'Em contato',            2,  'aberta', null,           'em_contato',            3,    '#B99A62'),
-    (c, 'Avaliação agendada',    3,  'aberta', null,           'avaliacao_agendada',    null, '#A88B57'),
-    (c, 'Avaliação realizada',   4,  'aberta', null,           'avaliacao_realizada',   2,    '#977C4C'),
-    (c, 'Orçamento apresentado', 5,  'aberta', null,           'orcamento_apresentado', 7,    '#866D41'),
-    (c, 'Em negociação',         6,  'aberta', null,           'em_negociacao',         15,   '#755E36'),
-    (c, 'Fechou',                7,  'ganho',  'fechou',       null,                    null, '#5E7D5A'),
-    (c, 'Não fechou',            8,  'perda',  'nao_fechou',   null,                    null, '#9A8F84'),
-    (c, 'Desistiu',              9,  'perda',  'desistiu',     null,                    null, '#8A8178'),
-    (c, 'Sem resposta',          10, 'perda',  'sem_resposta', null,                    null, '#B3AAA0');
+    (c, 'Novo contato',            1,  'aberta', null,           'novo_contato',          0,    '#C9A96E'),
+    (c, 'Em contato',              2,  'aberta', null,           'em_contato',            3,    '#B99A62'),
+    (c, 'Avaliação agendada',      3,  'aberta', null,           'avaliacao_agendada',    null, '#A88B57'),
+    (c, 'Compareceu',              4,  'aberta', null,           'avaliacao_realizada',   2,    '#977C4C'),
+    (c, 'Orçamento apresentado',   5,  'aberta', null,           'orcamento_apresentado', 7,    '#866D41'),
+    (c, 'Negociação / pensando',   6,  'aberta', null,           'em_negociacao',         20,   '#755E36'),
+    (c, 'Desmarcou',               7,  'aberta', null,           'desmarcou',             7,    '#B4533A'),
+    (c, 'Sem resposta',            8,  'perda',  'sem_resposta', null,                    null, '#B3AAA0'),
+    (c, 'Reativação',              9,  'aberta', null,           'reativacao',            30,   '#5F8A6A'),
+    (c, 'Fechou',                  10, 'ganho',  'fechou',       null,                    null, '#5E7D5A'),
+    (c, 'Não fechou',              11, 'perda',  'nao_fechou',   null,                    null, '#9A8F84'),
+    (c, 'Desistiu',                12, 'perda',  'desistiu',     null,                    null, '#8A8178');
 
   insert into public.motivos (clinica_id, nome, aplica_a, retorno_sugerido_dias, ordem) values
     (c, 'Valor alto',                        'nao_fechou', 30,   1),
@@ -298,6 +308,7 @@ begin
     (c, 'Não é o momento',                   'nao_fechou', 90,   7),
     (c, 'Momento financeiro',                'nao_fechou', 120,  8),
     (c, 'Escolheu outra clínica',            'nao_fechou', 365,  9),
+    (c, 'Parou de responder',                'nao_fechou', 90,   10),
     (c, 'Outro',                             'nao_fechou', null, 99),
     (c, 'Sem interesse no momento',          'desistiu',   180,  1),
     (c, 'Fez o tratamento em outro lugar',   'desistiu',   365,  2),
@@ -329,6 +340,10 @@ begin
      'Olá, {primeiro_nome}! Sentimos sua falta. Quando for melhor para você, reservamos um novo horário. Tenho disponibilidade em {data}. Fica bom?'),
     (c, 'reativacao', 'Reativação de paciente',
      'Olá, {primeiro_nome}! Há algum tempo não nos vemos no Instituto CG. Que tal agendarmos uma visita para cuidarmos do seu sorriso?'),
+    (c, 'acompanhar_decisao', 'Acompanhando a decisão',
+     'Olá, {primeiro_nome}! Tudo bem? Sei que é uma decisão importante. Se quiser conversar sobre {procedimento} ou tirar alguma dúvida, estou por aqui — sem pressa.'),
+    (c, 'apresentar_orcamento', 'Após a avaliação',
+     'Olá, {primeiro_nome}! Foi um prazer receber você hoje. Qualquer dúvida sobre o que conversamos, estou à disposição.'),
     (c, 'confirmar_pagamento', 'Lembrete de pagamento',
      'Olá, {primeiro_nome}! Tudo bem? Passando para lembrar, com carinho, do pagamento de {valor} previsto para {data}. Qualquer dúvida, estou à disposição.'),
     (c, 'recuperar_falta', 'Paciente faltou',

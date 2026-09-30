@@ -62,7 +62,7 @@ test("novo contato: erros de uma vez, depois cadastro completo com tudo automát
 
   // aparece no funil e no painel de hoje
   await menu(page).getByRole("link", { name: "Funil" }).click();
-  await expect(page.getByRole("region", { name: "Novo contato" }).getByRole("link", { name: /Helena Duarte/ })).toBeVisible();
+  await expect(page.getByRole("listitem", { name: "Novo contato", exact: true }).getByRole("link", { name: "Helena Duarte" })).toBeVisible();
   await menu(page).getByRole("link", { name: "Hoje" }).click();
   await expect(page.getByRole("region", { name: "Urgente" }).getByRole("article", { name: "Helena Duarte" })).toBeVisible();
 });
@@ -127,9 +127,7 @@ test("paciente antigo com interesse e mês lembrado abre negociação", async ({
   await page.getByRole("button", { name: "Salvar e abrir ficha" }).click();
   await expect(page.getByRole("heading", { name: "Cláudia Reis", level: 1 })).toBeVisible();
   await expect(page.getByRole("region", { name: "Funil" }).locator('[aria-current="step"]')).toHaveText("Em contato");
-  await expect(page.getByRole("region", { name: "Próxima ação" }).getByText("Paciente antigo com interesse", { exact: false }).or(
-    page.getByRole("region", { name: "Próxima ação" }).getByText("Demonstrou interesse"),
-  )).toBeVisible();
+  await expect(page.getByRole("region", { name: "Próxima ação" }).getByText("Demonstrou interesse em clareamento dental")).toBeVisible();
   await expect(page.getByRole("region", { name: "Na clínica" }).getByText("nov/2025")).toBeVisible();
 });
 

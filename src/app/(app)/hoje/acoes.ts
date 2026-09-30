@@ -95,3 +95,70 @@ export async function marcarComoPago(parcelaId: string): Promise<Retorno> {
     return null;
   }, "Pagamento registrado.");
 }
+
+const esquemaEdicao = z.object({
+  tarefaId: uuid,
+  titulo: z.string().trim().min(2, "Escreva o que precisa ser feito.").max(200),
+  venceEm: data.optional(),
+  horario: z.union([z.literal(""), z.string().regex(/^\d{2}:\d{2}$/, "Horário inválido.")]).optional(),
+  mensagem: z.string().max(2000).optional(),
+});
+
+export type DadosEdicao = z.input<typeof esquemaEdicao>;
+
+/** Toda ação (automática ou não) pode ser ajustada: título, data, horário e mensagem. */
+export async function editarTarefa(dados: DadosEdicao): Promise<Retorno> {
+  const lido = esquemaEdicao.safeParse(dados);
+  if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
+  const v = lido.data;
+  const sessao = await exigirSessao();
+  try {
+    const r = await comoUsuaria(sessao.usuarioId, async (db) => {
+      const { rows } = await db.query<{ tipo: string; status: string; hoje: string }>(
+        "select tipo, status, public.hoje_clinica(clinica_id) as hoje from public.tarefas where id = $1",
+        [v.tarefaId],
+      );
+      const t = rows[0];
+      if (!t) throw Object.assign(new Error("Tarefa não encontrada."), { code: "P0002" });
+      if (t.status !== "pendente") throw Object.assign(new Error("Esta tarefa não está mais pendente."), { code: "P0001" });
+      // A data do lembrete de pagamento acompanha o vencimento da parcela.
+      const mudaData = t.tipo !== "confirmar_pagamento" && v.venceEm;
+      if (mudaData && v.venceEm! < t.hoje) throw Object.assign(new Error("Escolha hoje ou uma data futura."), { code: "P0001" });
+      await db.query(
+        `update public.tarefas set titulo = $2, vence_em = coalesce($3::date, vence_em), horario = $4::time,
+                mensagem_sugerida = $5
+          where id = $1`,
+        [v.tarefaId, v.titulo, mudaData ? v.venceEm : null, v.horario || null, v.mensagem?.trim() || null],
+      );
+      return t;
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, mensagem: r.tipo === "confirmar_pagamento" && v.venceEm ? "Ação atualizada (a data segue o vencimento da parcela)." : "Ação atualizada." };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+/** "Não fazer esta ação": cancela a tarefa, registrando o motivo. */
+export async function cancelarTarefa(tarefaId: string, motivo: string): Promise<Retorno> {
+  if (!uuid.safeParse(tarefaId).success) return { ok: false, erro: "Tarefa inválida." };
+  const sessao = await exigirSessao();
+  try {
+    await comoUsuaria(sessao.usuarioId, async (db) => {
+      const { rows } = await db.query<{ tipo: string; status: string }>("select tipo, status from public.tarefas where id = $1", [tarefaId]);
+      if (!rows[0]) throw Object.assign(new Error("Tarefa não encontrada."), { code: "P0002" });
+      if (rows[0].status !== "pendente") throw Object.assign(new Error("Esta tarefa não está mais pendente."), { code: "P0001" });
+      if (rows[0].tipo === "confirmar_pagamento") {
+        throw Object.assign(new Error("Lembretes de pagamento saem sozinhos quando o pagamento é registrado."), { code: "P0001" });
+      }
+      await db.query(
+        "update public.tarefas set status = 'cancelada', cancelada_motivo = $2 where id = $1",
+        [tarefaId, `Cancelada pela usuária${motivo.trim() ? `: ${motivo.trim().slice(0, 300)}` : ""}`],
+      );
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, mensagem: "Ação cancelada. Ela fica registrada no histórico de tarefas." };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}

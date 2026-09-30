@@ -29,7 +29,7 @@ create type public.direcao_contato as enum ('saida', 'entrada');
 create type public.tipo_tarefa as enum (
   'primeiro_contato', 'follow_up', 'follow_up_orcamento', 'confirmar_agendamento',
   'recuperar_desmarcacao', 'recuperar_falta', 'reabrir_sem_resposta', 'retorno_por_motivo',
-  'reativacao', 'manutencao', 'confirmar_pagamento', 'apresentar_orcamento',
+  'reativacao', 'manutencao', 'confirmar_pagamento', 'apresentar_orcamento', 'acompanhar_decisao',
   'agendar_tratamento', 'definir_proxima_acao', 'personalizada'
 );
 create type public.categoria_tarefa as enum ('vendas', 'agenda', 'recuperacao', 'reativacao', 'financeiro', 'outra');
@@ -84,7 +84,7 @@ create table public.pessoas (
   em_tratamento                 boolean not null default false,
 
   -- Datas de relacionamento
-  primeiro_contato_em           date not null default current_date,
+  primeiro_contato_em           date not null default (now() at time zone 'America/Sao_Paulo')::date,
   ultimo_contato_em             timestamptz,         -- atualizado pelos follow-ups
 
   arquivado_em                  timestamptz,

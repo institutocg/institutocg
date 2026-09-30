@@ -369,8 +369,10 @@ export async function carregarFicha(db: Db, sessao: Sessao, pessoaId: string): P
        ) eventos order by quando desc limit 60`,
       [pessoaId],
     ),
+    // Resgate em andamento = negociação aberta na etapa "Reativação".
     db.query(
-      "select 1 from public.tarefas where chave_dedupe = 'pessoa:' || $1 and status = 'pendente'",
+      `select 1 from public.oportunidades o join public.etapas_funil e on e.id = o.etapa_id
+        where o.pessoa_id = $1 and o.status = 'aberta' and e.marco = 'reativacao'`,
       [pessoaId],
     ),
   ]);
@@ -469,39 +471,4 @@ export async function listarContatos(db: Db, clinicaId: string, filtro: Filtro, 
     [clinicaId, termo, digitos.length >= 4 ? digitos : ""],
   );
   return rows;
-}
-
-export interface CartaoFunil {
-  id: string;
-  pessoa_id: string;
-  nome: string;
-  procedimento: string | null;
-  etapa_id: string;
-  dias_na_etapa: number;
-  valor_estimado_centavos: number | null;
-  proxima_acao: string | null;
-  proxima_acao_em: string | null;
-  sla_dias: number | null;
-}
-
-export async function carregarFunil(db: Db, clinicaId: string) {
-  const [etapas, cartoes] = await Promise.all([
-    db.query<Etapa & { cor: string; sla_dias: number | null }>(
-      `select id, nome, ordem, tipo, cor, sla_dias from public.etapas_funil
-        where clinica_id = $1 and ativo and (tipo = 'aberta' or resultado = 'sem_resposta') order by ordem`,
-      [clinicaId],
-    ),
-    db.query<CartaoFunil>(
-      `select o.id, o.pessoa_id, c.nome, c.procedimento_interesse as procedimento, o.etapa_id,
-              coalesce(c.dias_na_etapa, 0) as dias_na_etapa, o.valor_estimado_centavos,
-              c.proxima_acao, c.proxima_acao_em, e.sla_dias
-         from public.oportunidades o
-         join public.v_contatos c on c.id = o.pessoa_id
-         join public.etapas_funil e on e.id = o.etapa_id
-        where o.clinica_id = $1 and o.status in ('aberta', 'pausada')
-        order by o.etapa_desde`,
-      [clinicaId],
-    ),
-  ]);
-  return { etapas: etapas.rows, cartoes: cartoes.rows };
 }

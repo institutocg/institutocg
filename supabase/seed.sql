@@ -94,8 +94,8 @@ begin
   values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas de porcelana'),
           (public.etapa_por_marco(c, 'em_negociacao')).id, 2200000)
   returning id into o;
-  perform public.definir_proxima_acao(o, 'follow_up', 'Retomar a conversa com Luiza (ficou de pensar)',
-                                      hoje + 2, 'alta', 'R-RES-02');
+  perform public.definir_proxima_acao(o, 'acompanhar_decisao', 'Acompanhar a decisão de Luiza',
+                                      hoje + 2, 'normal', 'R-RES-02', 1, 'Ficou de pensar');
 
   -- 7. Marcos: follow-up de orçamento que deveria ter sido feito há 3 dias (atrasada)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em)
@@ -132,9 +132,8 @@ begin
   values (c, 'paciente_antigo', 'Sofia Martins', '+5511900000010',
           (select id from public.origens where clinica_id = c and nome = 'Paciente antigo'), hoje - 600)
   returning id into p;
-  perform public.criar_tarefa_auto(p, null, 'reativacao', 'reativacao', 'Reativar contato com Sofia', hoje,
-                                   'baixa', 'R-DIA-03', 'pessoa:' || p,
-                                   p_descricao => 'Último atendimento em ' || to_char(hoje - 600, 'MM/YYYY'));
+  perform public.abrir_reativacao(p, null, null, 'reativacao', 'Reativar contato com Sofia',
+                                  'Último atendimento em ' || to_char(hoje - 600, 'MM/YYYY'), hoje, 'R-DIA-03');
   update public.tarefas set vence_em = hoje where pessoa_id = p and status = 'pendente';
 
   -- 10. Ana: fechou lentes; entrada paga; parcela 1 vence hoje (importante)
@@ -174,6 +173,31 @@ begin
   returning id into o;
   perform public.definir_proxima_acao(o, 'follow_up', 'Retornar para Fernanda (pediu retorno)',
                                       hoje + 4, 'alta', 'R-RES-03');
+
+  -- 12. Tiago: recebeu orçamento e parou de responder → "Sem resposta" (nova tentativa leve)
+  insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em, ultimo_contato_em)
+  values (c, 'Tiago Moreira', '+5511900000012',
+          (select id from public.origens where clinica_id = c and nome = 'Google'), hoje - 40, now() - interval '12 days')
+  returning id into p;
+  insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id, valor_estimado_centavos)
+  values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Implantes'),
+          (public.etapa_por_marco(c, 'em_negociacao')).id, 900000)
+  returning id into o;
+  perform public.mover_etapa(o, public.etapa_por_resultado(c, 'sem_resposta'), 'Parou de responder após o orçamento');
+  update public.tarefas set vence_em = hoje + 12 where oportunidade_id = o and status = 'pendente';
+
+  -- 13. Vera: não fechou por valor alto; retomada combinada para daqui a 25 dias
+  insert into public.pessoas (clinica_id, nome, whatsapp_e164, origem_id, primeiro_contato_em, ultimo_contato_em)
+  values (c, 'Vera Albuquerque', '+5511900000013',
+          (select id from public.origens where clinica_id = c and nome = 'Indicação de paciente'), hoje - 21, now() - interval '5 days')
+  returning id into p;
+  insert into public.oportunidades (clinica_id, pessoa_id, procedimento_id, etapa_id, valor_estimado_centavos)
+  values (c, p, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas de porcelana'),
+          (public.etapa_por_marco(c, 'orcamento_apresentado')).id, 2400000)
+  returning id into o;
+  update public.oportunidades set reabre_em = hoje + 25 where id = o;
+  perform public.mover_etapa(o, public.etapa_por_resultado(c, 'nao_fechou'), 'Achou o investimento alto neste momento',
+                             (select id from public.motivos where clinica_id = c and nome = 'Valor alto'));
 end;
 $$;
 

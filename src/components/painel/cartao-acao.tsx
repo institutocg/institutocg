@@ -1,10 +1,12 @@
 "use client";
 
-import { Check, Copy, ExternalLink, HandCoins, MessageCircle, Phone, UserRound } from "lucide-react";
+import { Check, Copy, ExternalLink, HandCoins, MessageCircle, Pencil, Phone, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition, type ReactNode } from "react";
 import {
+  cancelarTarefa,
   concluirTarefa,
+  editarTarefa,
   marcarComoPago,
   registrarContato,
   type DadosRegistro,
@@ -23,7 +25,7 @@ const COR: Record<Grupo, { faixa: string; chip: string; rotulo: string }> = {
   rotina: { faixa: "bg-rotina", chip: "bg-rotina-claro text-rotina", rotulo: "Rotina" },
 };
 
-type Janela = "mensagem" | "registro" | "pago" | null;
+type Janela = "mensagem" | "registro" | "pago" | "editar" | null;
 
 export function CartaoAcao({
   cartao,
@@ -81,6 +83,15 @@ export function CartaoAcao({
             >
               {cartao.quando}
             </span>
+            <button
+              type="button"
+              onClick={() => setJanela("editar")}
+              aria-label="Editar ação"
+              title="Editar ação"
+              className="rounded-md p-1 text-sutil hover:bg-fundo hover:text-dourado-escuro"
+            >
+              <Pencil className="size-3.5" />
+            </button>
           </div>
         </div>
 
@@ -92,10 +103,12 @@ export function CartaoAcao({
         {!compacto && (
           <div className="mt-3 rounded-lg bg-fundo px-3.5 py-2.5">
             <p className="text-[11px] font-semibold tracking-[0.08em] text-sutil uppercase">Ação recomendada</p>
-            <p className="mt-0.5 text-sm text-grafite">{cartao.acaoRecomendada}</p>
+            {/* A tarefa como está gravada (a usuária pode editá-la) e, abaixo, a orientação do sistema. */}
+            {!cartao.pagamento && <p className="mt-0.5 text-sm font-medium text-grafite">{cartao.tituloTarefa}</p>}
+            <p className={`mt-0.5 text-sm ${cartao.pagamento ? "text-grafite" : "text-suave"}`}>{cartao.acaoRecomendada}</p>
           </div>
         )}
-        {compacto && <p className="mt-1 text-sm text-grafite">→ {cartao.acaoRecomendada}</p>}
+        {compacto && <p className="mt-1 text-sm text-grafite">→ {cartao.pagamento ? cartao.acaoRecomendada : cartao.tituloTarefa}</p>}
 
         <div className="mt-3 flex flex-wrap gap-2">
           {cartao.botoes.filter((b) => !(naFicha && b === "abrir_paciente")).map((b) => {
@@ -148,6 +161,15 @@ export function CartaoAcao({
       </div>
 
       <JanelaMensagem cartao={cartao} aberto={janela === "mensagem"} aoFechar={() => setJanela(null)} />
+      {janela === "editar" && (
+        <JanelaEditar
+          cartao={cartao}
+          aoFechar={() => setJanela(null)}
+          pendente={pendente}
+          salvar={(dados) => executar(() => editarTarefa(dados))}
+          cancelar={(motivo) => executar(() => cancelarTarefa(cartao.id, motivo))}
+        />
+      )}
       <JanelaRegistro
         cartao={cartao}
         motivos={motivos}
@@ -181,6 +203,84 @@ export function CartaoAcao({
         </Rodape>
       </Dialogo>
     </article>
+  );
+}
+
+// ─── Janela: editar ou cancelar a ação ──────────────────────────────────────
+
+function JanelaEditar({
+  cartao,
+  aoFechar,
+  pendente,
+  salvar,
+  cancelar,
+}: {
+  cartao: Cartao;
+  aoFechar: () => void;
+  pendente: boolean;
+  salvar: (dados: { tarefaId: string; titulo: string; venceEm?: string; horario?: string; mensagem?: string }) => void;
+  cancelar: (motivo: string) => void;
+}) {
+  const [titulo, setTitulo] = useState(cartao.tituloTarefa);
+  const [venceEm, setVenceEm] = useState(cartao.vence);
+  const [horario, setHorario] = useState(cartao.horario?.slice(0, 5) ?? "");
+  const [mensagem, setMensagem] = useState(cartao.mensagem ?? "");
+  const [cancelando, setCancelando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+
+  return (
+    <Dialogo aberto aoFechar={aoFechar} titulo="Editar ação" subtitulo={cartao.subtitulo ?? cartao.titulo}>
+      {!cancelando ? (
+        <>
+          <Campo rotulo="O que fazer">
+            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className={CAMPO} />
+          </Campo>
+          <div className="grid grid-cols-2 gap-3">
+            <Campo rotulo="Data">
+              <input type="date" value={venceEm} disabled={cartao.pagamento} onChange={(e) => setVenceEm(e.target.value)} className={CAMPO} />
+            </Campo>
+            <Campo rotulo="Horário (opcional)">
+              <input type="time" value={horario} onChange={(e) => setHorario(e.target.value)} className={CAMPO} />
+            </Campo>
+          </div>
+          {cartao.pagamento && <p className="mt-1 text-xs text-sutil">A data do lembrete acompanha o vencimento da parcela.</p>}
+          <Campo rotulo="Mensagem sugerida">
+            <textarea rows={4} value={mensagem} onChange={(e) => setMensagem(e.target.value)} className={CAMPO} />
+          </Campo>
+          <Rodape>
+            {!cartao.pagamento && (
+              <button type="button" onClick={() => setCancelando(true)} className="mr-auto text-sm text-urgente underline-offset-4 hover:underline">
+                Não fazer esta ação
+              </button>
+            )}
+            <Botao onClick={aoFechar}>Voltar</Botao>
+            <Botao
+              principal
+              disabled={pendente}
+              onClick={() => salvar({ tarefaId: cartao.id, titulo, venceEm: cartao.pagamento ? undefined : venceEm, horario, mensagem })}
+            >
+              {pendente ? "Salvando…" : "Salvar"}
+            </Botao>
+          </Rodape>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-suave">
+            A ação sai da lista e fica registrada como cancelada. Se esta pessoa estiver em negociação, o sistema vai
+            perguntar qual é o próximo passo na rotina de amanhã.
+          </p>
+          <Campo rotulo="Motivo (opcional)">
+            <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: já conversamos pessoalmente" className={CAMPO} />
+          </Campo>
+          <Rodape>
+            <Botao onClick={() => setCancelando(false)}>Voltar</Botao>
+            <Botao principal disabled={pendente} onClick={() => cancelar(motivo)}>
+              {pendente ? "Cancelando…" : "Cancelar a ação"}
+            </Botao>
+          </Rodape>
+        </>
+      )}
+    </Dialogo>
   );
 }
 

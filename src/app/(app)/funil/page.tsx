@@ -1,76 +1,101 @@
-import Link from "next/link";
+import { Search } from "lucide-react";
+import { z } from "zod";
+import { Quadro } from "@/components/funil/quadro";
 import { comoUsuaria } from "@/lib/db";
 import { formatarMoedaCompacta } from "@/lib/moeda";
-import { carregarFunil } from "@/modules/contatos/servidor";
-import { rotuloData } from "@/modules/painel/painel";
+import { montarQuadro, resumoQuadro } from "@/modules/funil/funil";
+import { carregarFunil } from "@/modules/funil/servidor";
 import { exigirSessao } from "@/modules/sessao/sessao";
 
 export const metadata = { title: "Funil · Instituto CG" };
 
-export default async function Funil() {
+const uuidOuNulo = (v: string | undefined) => (v && z.uuid().safeParse(v).success ? v : null);
+
+export default async function Funil({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; procedimento?: string; responsavel?: string }>;
+}) {
   const sessao = await exigirSessao();
-  const { etapas, cartoes, hoje } = await comoUsuaria(sessao.usuarioId, async (db) => ({
-    ...(await carregarFunil(db, sessao.clinicaId)),
-    hoje: (await db.query<{ hoje: string }>("select public.hoje_clinica($1) as hoje", [sessao.clinicaId])).rows[0].hoje,
-  }));
+  const busca = await searchParams;
+  const filtros = {
+    busca: busca.q ?? "",
+    procedimentoId: uuidOuNulo(busca.procedimento),
+    responsavelId: uuidOuNulo(busca.responsavel),
+  };
+  const dados = await comoUsuaria(sessao.usuarioId, (db) => carregarFunil(db, sessao.clinicaId, filtros));
+  const colunas = montarQuadro(dados.etapas, dados.negociacoes, dados.hoje);
+  const resumo = resumoQuadro(colunas);
+  const filtrando = Boolean(filtros.busca || filtros.procedimentoId || filtros.responsavelId);
 
   return (
-    <div className="px-4 py-8 sm:px-8 lg:py-12">
-      <h1 className="font-titulo text-4xl">Funil</h1>
-      <p className="mt-1 text-suave">
-        {cartoes.length} {cartoes.length === 1 ? "negociação em andamento" : "negociações em andamento"}. Clique em um cartão para abrir a ficha.
-      </p>
+    <div className="px-4 py-8 sm:px-8 lg:py-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-titulo text-4xl">Funil</h1>
+          <p className="mt-1 text-suave">
+            {resumo.emAndamento} {resumo.emAndamento === 1 ? "negociação em andamento" : "negociações em andamento"}
+            {resumo.potencialCentavos > 0 && ` · ${formatarMoedaCompacta(resumo.potencialCentavos)} em potencial`}
+            {resumo.precisamAtencao > 0 && (
+              <span className="text-urgente">
+                {" "}
+                · {resumo.precisamAtencao} {resumo.precisamAtencao === 1 ? "precisa" : "precisam"} de atenção
+              </span>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-sutil">
+            Arraste um cartão para outra etapa (ou use “Mover”). O sistema sugere a próxima ação — você confirma, edita ou recusa.
+          </p>
+        </div>
 
-      <div className="mt-8 flex gap-4 overflow-x-auto pb-4">
-        {etapas.map((e) => {
-          const daEtapa = cartoes.filter((c) => c.etapa_id === e.id);
-          const total = daEtapa.reduce((s, c) => s + (c.valor_estimado_centavos ?? 0), 0);
-          const pausada = e.tipo !== "aberta";
-          return (
-            <section
-              key={e.id}
-              aria-label={e.nome}
-              className={`flex w-64 shrink-0 flex-col rounded-2xl border border-borda ${pausada ? "bg-fundo" : "bg-superficie/60"}`}
-            >
-              <header className="border-b border-borda px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="size-2.5 rounded-full" style={{ background: e.cor }} aria-hidden />
-                  <h2 className="text-sm font-semibold">{e.nome}</h2>
-                  <span className="ml-auto text-xs text-sutil">{daEtapa.length}</span>
-                </div>
-                {total > 0 && <p className="mt-0.5 text-xs text-sutil">{formatarMoedaCompacta(total)} estimados</p>}
-              </header>
-              <div className="flex-1 space-y-2 p-2.5">
-                {daEtapa.length === 0 && <p className="px-2 py-3 text-center text-xs text-sutil">Vazio</p>}
-                {daEtapa.map((c) => {
-                  const parado = c.sla_dias !== null && c.dias_na_etapa > c.sla_dias;
-                  return (
-                    <Link
-                      key={c.id}
-                      href={`/contatos/${c.pessoa_id}`}
-                      className={`block rounded-xl border bg-superficie p-3 text-sm transition hover:border-dourado hover:shadow-sm ${
-                        parado ? "border-importante/50" : "border-borda"
-                      }`}
-                    >
-                      <p className="font-medium">{c.nome}</p>
-                      {c.procedimento && <p className="text-xs text-dourado-escuro">{c.procedimento}</p>}
-                      <p className={`mt-1 text-xs ${parado ? "text-importante" : "text-sutil"}`}>
-                        {c.dias_na_etapa === 0 ? "Entrou hoje" : `Há ${c.dias_na_etapa} ${c.dias_na_etapa === 1 ? "dia" : "dias"} nesta etapa`}
-                        {c.valor_estimado_centavos ? ` · ${formatarMoedaCompacta(c.valor_estimado_centavos)}` : ""}
-                      </p>
-                      {c.proxima_acao && (
-                        <p className="mt-2 border-t border-borda pt-2 text-xs text-suave">
-                          → {c.proxima_acao}
-                          <span className={c.proxima_acao_em! < hoje ? " text-urgente" : ""}> · {rotuloData(c.proxima_acao_em!, hoje).toLowerCase()}</span>
-                        </p>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+        <form role="search" className="flex flex-wrap items-center gap-2">
+          <label className="relative">
+            <span className="sr-only">Buscar pelo nome</span>
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-sutil" />
+            <input
+              name="q"
+              defaultValue={filtros.busca}
+              placeholder="Buscar pelo nome"
+              className="w-44 rounded-lg border border-borda-forte bg-superficie py-2 pr-2 pl-8 text-sm outline-none focus:border-dourado"
+            />
+          </label>
+          <select
+            name="procedimento"
+            aria-label="Procedimento"
+            defaultValue={filtros.procedimentoId ?? ""}
+            className="rounded-lg border border-borda-forte bg-superficie px-2 py-2 text-sm outline-none focus:border-dourado"
+          >
+            <option value="">Todos os procedimentos</option>
+            {dados.opcoes.procedimentos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+          <select
+            name="responsavel"
+            aria-label="Responsável"
+            defaultValue={filtros.responsavelId ?? ""}
+            className="rounded-lg border border-borda-forte bg-superficie px-2 py-2 text-sm outline-none focus:border-dourado"
+          >
+            <option value="">Todos os responsáveis</option>
+            {dados.opcoes.responsaveis.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.nome}
+              </option>
+            ))}
+          </select>
+          <button className="rounded-lg bg-grafite px-3.5 py-2 text-sm font-medium text-white hover:bg-black">Filtrar</button>
+          {filtrando && (
+            <a href="/funil" className="text-sm text-dourado-escuro underline underline-offset-4">
+              Limpar
+            </a>
+          )}
+        </form>
+      </div>
+
+      <div className="mt-6">
+        <Quadro colunas={colunas} hoje={dados.hoje} opcoes={dados.opcoes} diasEncerradas={dados.diasEncerradas} />
       </div>
     </div>
   );
