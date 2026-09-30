@@ -115,7 +115,7 @@ begin
       coalesce(nullif(btrim(p_acao ->> 'titulo'), ''), s ->> 'titulo'),
       coalesce(nullif(p_acao ->> 'vence_em', '')::date, (s ->> 'vence_em')::date, v_hoje),
       coalesce((s ->> 'prioridade')::public.prioridade_tarefa, 'normal'),
-      'R-FUN-01', 'op:' || v_alvo, 1, s ->> 'descricao', null,
+      coalesce(s ->> 'situacao', 'R-FUN-01'), 'op:' || v_alvo, 1, s ->> 'descricao', null,
       coalesce(nullif(btrim(p_acao ->> 'mensagem'), ''), s ->> 'mensagem'));
   end if;
 
@@ -154,10 +154,16 @@ $$;
 revoke execute on function public.criar_tarefa_auto(uuid, uuid, public.tipo_tarefa, public.categoria_tarefa, text, date,
   public.prioridade_tarefa, text, text, int, text, uuid, text) from public, anon, authenticated;
 revoke execute on function public.definir_proxima_acao(uuid, public.tipo_tarefa, text, date, public.prioridade_tarefa,
-  text, int, text, public.categoria_tarefa) from public, anon, authenticated;
+  text, int, text, public.categoria_tarefa, text) from public, anon, authenticated;
 revoke execute on function public.avancar_para_marco(uuid, text, text) from public, anon, authenticated;
 revoke execute on function public.aplicar_sugestao(uuid, text, boolean) from public, anon, authenticated;
-revoke execute on function public.abrir_reativacao(uuid, uuid, uuid, public.tipo_tarefa, text, text, date, text, text)
+revoke execute on function public.abrir_reativacao(uuid, uuid, uuid, public.tipo_tarefa, text, text, date, text, text,
+  public.prioridade_tarefa) from public, anon, authenticated;
+revoke execute on function public.criar_por_regra(text, uuid, uuid, text, date, date, uuid, text, jsonb, boolean)
   from public, anon, authenticated;
+revoke execute on function public.regra(uuid, text) from public, anon, authenticated;
+revoke execute on function public.renderizar_texto(text, uuid, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.renderizar_mensagem(uuid, text, uuid, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.cadencia(uuid, text) from public, anon, authenticated;
 revoke execute on function public.mover_etapa_manual(uuid, uuid, text, uuid, jsonb) from anon;
 revoke execute on function public.sugerir_acao(uuid, uuid, uuid, boolean) from anon;

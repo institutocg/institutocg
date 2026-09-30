@@ -82,6 +82,8 @@ create table public.pessoas (
   ultimo_atendimento_faixa      text check (ultimo_atendimento_faixa in (
                                   'menos_6_meses', '6_a_12_meses', '1_a_2_anos', 'mais_2_anos', 'nao_lembra')),
   em_tratamento                 boolean not null default false,
+  -- Data em que o paciente deve ser convidado a voltar (ex.: 6 meses após concluir o tratamento).
+  retorno_previsto_em           date,
 
   -- Datas de relacionamento
   primeiro_contato_em           date not null default (now() at time zone 'America/Sao_Paulo')::date,
@@ -327,6 +329,41 @@ create index tarefas_pessoa on public.tarefas (pessoa_id, status);
 alter table public.interacoes
   add foreign key (clinica_id, tarefa_id) references public.tarefas (clinica_id, id);
 
+-- ─── Regras de follow-up (editáveis pela administradora) ─────────────────────
+-- Uma regra por situação comercial: o que fazer, quando, quantas tentativas,
+-- o que acontece se a pessoa continuar sem responder e qual mensagem sugerir.
+
+create table public.regras_followup (
+  id                      uuid primary key default gen_random_uuid(),
+  clinica_id              uuid not null references public.clinicas (id),
+  situacao                text not null check (situacao in (
+                            'novo_contato', 'em_contato', 'confirmacao', 'compareceu', 'orcamento_apresentado',
+                            'pensando', 'desmarcou', 'faltou', 'sem_resposta', 'nao_fechou', 'fechou',
+                            'reativacao', 'paciente_inativo', 'manutencao', 'pos_tratamento')),
+  nome                    text not null,
+  quando                  text not null,            -- explicação do gatilho, para a tela
+  ativa                   boolean not null default true,
+  tipo_tarefa             public.tipo_tarefa not null,
+  titulo_modelo           text not null check (length(btrim(titulo_modelo)) >= 3),
+  -- Primeira ação: N dias após o evento (0 = no mesmo dia). Datas caem sempre em dia útil.
+  prazo_dias              int check (prazo_dias between 0 and 730),
+  -- Novas tentativas se não houver resposta: dias após a tentativa anterior.
+  intervalos              int[] not null default '{}' check (array_position(intervalos, null) is null),
+  prioridade              public.prioridade_tarefa not null default 'normal',
+  -- Se continuar sem resposta depois da última tentativa:
+  ao_esgotar              text not null default 'decidir' check (ao_esgotar in ('decidir', 'sem_resposta', 'reativacao', 'encerrar')),
+  espera_reativacao_dias  int check (espera_reativacao_dias between 0 and 730),
+  -- Regras por período (paciente inativo, pós-tratamento): meses desde o último atendimento.
+  periodo_meses           int check (periodo_meses between 1 and 60),
+  mensagem_situacao       text,                     -- modelo em modelos_mensagem
+  criado_em               timestamptz not null default now(),
+  atualizado_em           timestamptz not null default now(),
+  unique (clinica_id, id),
+  unique (clinica_id, situacao),
+  check (cardinality(intervalos) <= 5),
+  check (0 < all (intervalos))
+);
+
 -- =============================================================================
 -- Gatilhos de regra de negócio
 -- =============================================================================
@@ -571,14 +608,14 @@ declare
   t text;
 begin
   foreach t in array array[
-    'pessoas', 'oportunidades', 'tratamentos_anteriores', 'agendamentos', 'tarefas'
+    'pessoas', 'oportunidades', 'tratamentos_anteriores', 'agendamentos', 'tarefas', 'regras_followup'
   ] loop
     execute format(
       'create trigger definir_atualizado_em before update on public.%I
          for each row execute function public.definir_atualizado_em()', t);
   end loop;
   foreach t in array array[
-    'pessoas', 'oportunidades', 'tratamentos_anteriores', 'agendamentos', 'tarefas', 'interacoes'
+    'pessoas', 'oportunidades', 'tratamentos_anteriores', 'agendamentos', 'tarefas', 'interacoes', 'regras_followup'
   ] loop
     execute format(
       'create trigger auditoria after insert or update or delete on public.%I
@@ -613,6 +650,15 @@ begin
   end loop;
 end;
 $$;
+
+-- Regras: todos leem; somente a administradora altera.
+alter table public.regras_followup enable row level security;
+create policy catalogo_ler on public.regras_followup for select to authenticated
+  using (clinica_id in (select public.minhas_clinicas()));
+create policy catalogo_inserir on public.regras_followup for insert to authenticated
+  with check (public.eh_admin(clinica_id));
+create policy catalogo_alterar on public.regras_followup for update to authenticated
+  using (public.eh_admin(clinica_id)) with check (public.eh_admin(clinica_id));
 
 -- Interesses secundários podem ser removidos da negociação.
 create policy membro_remover on public.oportunidade_interesses for delete to authenticated

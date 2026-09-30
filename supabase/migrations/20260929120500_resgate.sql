@@ -17,6 +17,7 @@ declare
   v_hoje   date;
   v_trat   record;
   v_id     uuid;
+  r        public.regras_followup;
 begin
   select * into v_pessoa from public.pessoas where id = p_pessoa;
   if v_pessoa.id is null or (auth.uid() is not null and v_pessoa.clinica_id not in (select public.minhas_clinicas())) then
@@ -41,17 +42,21 @@ begin
 
   -- O resgate abre uma negociação na coluna "Reativação" do funil.
   if v_trat.nome is not null then
+    r := public.regra(v_pessoa.clinica_id, 'manutencao');
     v_id := public.abrir_reativacao(
       p_pessoa, null, v_trat.id, 'manutencao',
-      'Lembrar ' || split_part(v_pessoa.nome, ' ', 1) || ' da manutenção',
+      coalesce(public.renderizar_texto(r.titulo_modelo, p_pessoa, v_trat.nome),
+               'Lembrar ' || split_part(v_pessoa.nome, ' ', 1) || ' da manutenção'),
       lower(v_trat.nome) || coalesce(' em ' || to_char(v_trat.realizado_em, 'MM/YYYY'), ''),
-      v_hoje, 'R-RES-10', public.renderizar_mensagem(v_pessoa.clinica_id, 'manutencao', p_pessoa, v_trat.nome));
+      v_hoje, 'manutencao', public.renderizar_mensagem(v_pessoa.clinica_id, 'manutencao', p_pessoa, v_trat.nome));
   else
+    r := public.regra(v_pessoa.clinica_id, 'paciente_inativo');
     v_id := public.abrir_reativacao(
       p_pessoa, null, null, 'reativacao',
-      'Reativar contato com ' || split_part(v_pessoa.nome, ' ', 1),
+      coalesce(public.renderizar_texto(r.titulo_modelo, p_pessoa),
+               'Reativar contato com ' || split_part(v_pessoa.nome, ' ', 1)),
       'Paciente antigo' || coalesce(', último atendimento em ' || to_char(v_pessoa.ultimo_atendimento_informado, 'MM/YYYY'), ''),
-      v_hoje, 'R-RES-11');
+      v_hoje, 'paciente_inativo');
   end if;
   return v_id;
 end;

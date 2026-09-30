@@ -43,15 +43,18 @@ select testes.ok((select s ->> 'tipo' = 'follow_up_orcamento' and (s ->> 'vence_
                   from public.sugerir_acao(testes.v('op_lu'), testes.etf('Orçamento apresentado')) s),
   'orçamento apresentado → follow-up leve em 3 dias, com mensagem');
 select testes.ok((select s ->> 'tipo' = 'acompanhar_decisao' and (s ->> 'vence_em')::date = testes.util_f(4)
-                  and s ->> 'explicacao' like '%3 contatos espaçados (4, 10, 20 dias)%'
+                  and s ->> 'situacao' = 'pensando' and s ->> 'regra' = 'Paciente está pensando'
+                  and s ->> 'explicacao' like '%ação em 4 dias; sem resposta, mais 2 tentativas (após 6, 10 dias)%'
                   from public.sugerir_acao(testes.v('op_lu'), testes.etf('Negociação / pensando')) s),
-  'pensando → sequência de acompanhamento espaçada (4, 10, 20 dias)');
+  'pensando → regra "Paciente está pensando": 4 dias e depois 6 e 10 dias, explicada em palavras');
 select testes.ok((select s ->> 'tipo' = 'reabrir_sem_resposta' and (s ->> 'vence_em')::date = testes.util_f(7)
                   from public.sugerir_acao(testes.v('op_lu'), testes.etf('Sem resposta')) s),
   'sem resposta → nova tentativa em 7 dias');
 select testes.ok((select s ->> 'tipo' = 'recuperar_desmarcacao' and s ->> 'prioridade' = 'urgente'
+                  and s ->> 'titulo' = 'Entrar em contato com Luana para remarcar'
+                  and (s ->> 'vence_em')::date = testes.util_f(1)
                   from public.sugerir_acao(testes.v('op_lu'), testes.etf('Desmarcou')) s),
-  'desmarcou → recuperação ainda hoje');
+  'desmarcou → "Entrar em contato para remarcar" no dia seguinte');
 select testes.ok((select s ->> 'requer' = 'agendamento'
                   from public.sugerir_acao(testes.v('op_lu'), testes.etf('Avaliação agendada')) s),
   'avaliação agendada → pede data e horário');
@@ -70,7 +73,7 @@ select public.mover_etapa_manual(testes.v('op_lu'), testes.etf('Orçamento apres
   jsonb_build_object('criar', true, 'titulo', 'Mandar áudio para a Luana', 'vence_em', testes.hoje() + 5,
                      'mensagem', 'Oi, Luana! Gravei um áudio explicando as etapas.', 'valor_centavos', 1800000));
 select testes.ok((select t.titulo = 'Mandar áudio para a Luana' and t.vence_em = testes.util_f(5)
-                  and t.mensagem_sugerida = 'Oi, Luana! Gravei um áudio explicando as etapas.' and t.regra = 'R-FUN-01'
+                  and t.mensagem_sugerida = 'Oi, Luana! Gravei um áudio explicando as etapas.' and t.regra = 'orcamento_apresentado'
                   from testes.pend_op(testes.v('op_lu')) t)
              and (select count(*) from public.tarefas where oportunidade_id = testes.v('op_lu') and status = 'pendente') = 1
              and (select valor_estimado_centavos = 1800000 from public.oportunidades where id = testes.v('op_lu')),
@@ -104,7 +107,7 @@ select public.mover_etapa_manual(testes.v('op_ma'), testes.etf('Desmarcou'), 'Vi
   jsonb_build_object('criar', true));
 select testes.ok((select status = 'desmarcado' from public.agendamentos where oportunidade_id = testes.v('op_ma'))
              and (select count(*) from public.tarefas where oportunidade_id = testes.v('op_ma') and status = 'pendente') = 1
-             and (select tipo = 'recuperar_desmarcacao' and vence_em = testes.util_f(0) from testes.pend_op(testes.v('op_ma'))),
+             and (select tipo = 'recuperar_desmarcacao' and vence_em = testes.util_f(1) from testes.pend_op(testes.v('op_ma'))),
   'desmarcou pelo funil: agendamento desmarcado e uma única tarefa de recuperação');
 select public.mover_etapa_manual(testes.v('op_ma'), testes.etf('Avaliação agendada'), null, null,
   jsonb_build_object('agendar_em', to_char(testes.util_f(8), 'YYYY-MM-DD') || 'T15:30'));
@@ -168,10 +171,15 @@ select testes.ok((select status = 'pausada' from public.oportunidades where id =
              and (select tipo = 'reabrir_sem_resposta' and vence_em = testes.util_f(7) from testes.pend_op(testes.v('op_pe'))),
   'sem resposta: negociação pausada com nova tentativa em 7 dias');
 select public.registrar_acao((testes.pend_op(testes.v('op_pe'))).id, 'nao_respondeu');
+select testes.ok((select passo = 2 and vence_em = testes.util_f(14) from testes.pend_op(testes.v('op_pe'))),
+  'sem resposta de novo: mais uma tentativa em 14 dias (regra "Parou de responder")');
 select public.registrar_acao((testes.pend_op(testes.v('op_pe'))).id, 'nao_respondeu');
-select public.registrar_acao((testes.pend_op(testes.v('op_pe'))).id, 'nao_respondeu');
-select testes.ok((select tipo = 'definir_proxima_acao' from testes.pend_op(testes.v('op_pe'))),
-  'depois de 3 tentativas espaçadas, a decisão volta para a usuária (sem insistência)');
+select testes.ok((select e.marco = 'reativacao' and o.status = 'aberta' from public.oportunidades o
+                   join public.etapas_funil e on e.id = o.etapa_id where o.id = testes.v('op_pe'))
+             and (select tipo = 'reativacao' and vence_em = testes.util_f(60) and regra = 'reativacao'
+                  from testes.pend_op(testes.v('op_pe')))
+             and (select count(*) from public.tarefas where oportunidade_id = testes.v('op_pe') and status = 'pendente') = 1,
+  'continuou sem resposta: vai para "Reativação" com um contato leve daqui a 60 dias (sem insistência)');
 
 \echo '— Fechou → financeiro'
 select testes.guardar('ra', testes.pessoa_f('Raquel Moura', '+5511920000006'));

@@ -49,7 +49,7 @@ select testes.ok(not public.eh_dia_util(testes.v('m'), '2026-10-03')
 reset role; select testes.entrar('sec@motor.local'); set role authenticated;
 
 -- =============================================================================
-\echo '— Novo contato → primeiro contato (cadência 0, 1, 3 dias)'
+\echo '— Novo contato → primeiro contato (regra "Novo lead": hoje, +1, +2 dias)'
 -- =============================================================================
 
 select testes.guardar('ana', testes.nova_pessoa('Ana Lead', '+5511910000001'));
@@ -65,12 +65,15 @@ select testes.ok((select t.passo = 2 and t.vence_em = testes.util(1) from testes
              and testes.pendentes(testes.v('ana')) = 1,
   'concluir o 1º contato agenda sozinho a 2ª tentativa para o próximo dia útil');
 select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
-select testes.ok((select t.passo = 3 and t.vence_em = testes.util(3) from testes.pendente(testes.v('ana')) t),
-  '"não respondeu" avança a cadência, com intervalos cada vez maiores');
-select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
-select testes.ok((select t.tipo = 'definir_proxima_acao' and t.descricao like '%3 tentativas%'
+select testes.ok((select t.passo = 3 and t.vence_em = testes.util(2) and t.regra = 'novo_contato'
                   from testes.pendente(testes.v('ana')) t),
-  'cadência termina numa decisão humana depois de 3 tentativas (nunca insiste para sempre)');
+  '"não respondeu" avança a cadência pelos intervalos da regra');
+select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'nao_respondeu');
+select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Sem resposta'
+             and (select t.tipo = 'reabrir_sem_resposta' and t.vence_em = testes.util(7)
+                  from testes.pendente(testes.v('ana')) t)
+             and testes.pendentes(testes.v('ana')) = 1,
+  'tentativas esgotadas: vai para "Sem resposta" com nova tentativa em 7 dias (nunca fica esquecida)');
 select testes.ok((select count(*) = 3 from public.interacoes where pessoa_id = testes.v('ana')),
   'cada tentativa ficou no histórico de follow-ups');
 select testes.erro(
@@ -136,9 +139,9 @@ select testes.ok(testes.etapa_nome(testes.v('op_ana')) = 'Negociação / pensand
              and (select tipo = 'acompanhar_decisao' and vence_em = testes.util(4) from testes.pendente(testes.v('ana'))),
   'vai pensar: funil "Negociação / pensando" e acompanhamento sem pressão em 4 dias');
 select public.registrar_acao((testes.pendente(testes.v('ana'))).id, 'feito');
-select testes.ok((select tipo = 'acompanhar_decisao' and passo = 2 and vence_em = testes.util(10)
+select testes.ok((select tipo = 'acompanhar_decisao' and passo = 2 and vence_em = testes.util(6)
                   from testes.pendente(testes.v('ana'))),
-  'sequência de acompanhamento: 2º contato 10 dias depois');
+  'sequência de acompanhamento: 2º contato 6 dias depois (intervalos da regra)');
 
 select testes.erro(format($$select public.registrar_acao(%L, 'nao_fechou')$$, (testes.pendente(testes.v('ana'))).id),
   'motivo', '"não fechou" exige motivo');
@@ -166,11 +169,12 @@ with novo as (
   values (testes.v('m'), testes.v('bia'), testes.v('op_bia'), 'avaliacao', now() + interval '6 days') returning id
 ) select testes.guardar('ag_bia', id) from novo;
 update public.agendamentos set status = 'desmarcado' where id = testes.v('ag_bia');
-select testes.ok((select t.tipo = 'recuperar_desmarcacao' and t.prioridade = 'urgente' and t.vence_em = testes.util(0)
+select testes.ok((select t.tipo = 'recuperar_desmarcacao' and t.prioridade = 'urgente' and t.vence_em = testes.util(1)
+                     and t.titulo = 'Entrar em contato com Bia para remarcar' and t.regra = 'desmarcou'
                   from testes.pendente(testes.v('bia')) t)
              and not exists (select 1 from public.tarefas where agendamento_id = testes.v('ag_bia')
                               and tipo = 'confirmar_agendamento' and status = 'pendente'),
-  'desmarcou: tarefa urgente para hoje e a confirmação é cancelada');
+  'desmarcou (dia 10): "Entrar em contato para remarcar" no dia seguinte (11) e a confirmação é cancelada');
 select public.registrar_acao((testes.pendente(testes.v('bia'))).id, 'agendou', 'ligacao', null, null, null,
   now() + interval '8 days');
 select testes.ok((select remarcado_para_id is not null from public.agendamentos where id = testes.v('ag_bia')),
@@ -285,8 +289,9 @@ select testes.ok(testes.pendentes(testes.v('gil')) = 0 and testes.pendentes(test
   'reativação desligada (recadastramento): nenhum paciente antigo vira tarefa');
 
 reset role; select testes.entrar('dona@motor.local'); set role authenticated;
-update public.clinicas set configuracoes = configuracoes
-  || '{"reativacao_automatica": true, "limite_reativacao_dia": 2}'::jsonb where id = testes.v('m');
+update public.clinicas set configuracoes = configuracoes || '{"limite_reativacao_dia": 2}'::jsonb where id = testes.v('m');
+update public.regras_followup set ativa = true
+ where clinica_id = testes.v('m') and situacao in ('paciente_inativo', 'manutencao');
 select public.preparar_dia(testes.v('m'), true);
 select testes.ok((select tipo = 'manutencao' and descricao like 'manutenção e limpeza em%' from testes.pendente(testes.v('hugo')))
              and (select count(*) from public.tarefas where clinica_id = testes.v('m') and status = 'pendente'

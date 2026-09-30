@@ -17,7 +17,8 @@ with base as (
   select
     p.*,
     (now() at time zone c.fuso)::date as hoje,
-    coalesce((c.configuracoes ->> 'meses_paciente_inativo')::int, 12) as meses_inativo,
+    coalesce((select r.periodo_meses from public.regras_followup r
+               where r.clinica_id = p.clinica_id and r.situacao = 'paciente_inativo'), 6) as meses_inativo,
     greatest(
       p.ultimo_atendimento_informado,
       (select max((a.inicio at time zone c.fuso)::date)
@@ -232,27 +233,11 @@ begin
     'dias_fechados_extra', '[]'::jsonb,
     'fecha_pontos_facultativos', false,
     'sla_primeiro_contato_min', 15,
-    'meses_paciente_inativo', 12,
-    'dias_reativacao_desistiu', 180,
     'intervalo_min_contato_dias', 3,
     'intervalo_min_campanha_dias', 30,
-    'reativacao_automatica', false,
     'limite_reativacao_dia', 10,
     'validade_orcamento_dias', 30,
-    -- Intervalos (em dias) entre as tentativas de cada cadência de contato.
-    -- Cadências curtas e espaçadas: acompanhamento, não pressão. A última
-    -- tentativa sempre termina numa decisão da usuária.
-    'cadencias', jsonb_build_object(
-      'primeiro_contato',      jsonb_build_array(0, 1, 3),
-      'follow_up_orcamento',   jsonb_build_array(3, 7, 14),
-      'acompanhar_decisao',    jsonb_build_array(4, 10, 20),
-      'recuperar_desmarcacao', jsonb_build_array(0, 3, 7),
-      'recuperar_falta',       jsonb_build_array(0, 2, 5),
-      'reabrir_sem_resposta',  jsonb_build_array(7, 21, 45),
-      'reativacao',            jsonb_build_array(0, 21),
-      'manutencao',            jsonb_build_array(0, 21),
-      'follow_up',             jsonb_build_array(2, 4, 7)
-    ),
+    -- (Prazos e tentativas de follow-up ficam na tabela regras_followup.)
     -- Quantos dias as negociações encerradas (Fechou / Não fechou) ficam visíveis no funil.
     'dias_encerradas_no_funil', 30
   ))
@@ -337,7 +322,7 @@ begin
     (c, 'follow_up_orcamento', 'Acompanhamento do orçamento',
      'Olá, {primeiro_nome}! Tudo bem? Fico à disposição caso tenha ficado alguma dúvida sobre o planejamento de {procedimento}. Se preferir, podemos conversar com calma.'),
     (c, 'recuperar_desmarcacao', 'Paciente desmarcou',
-     'Olá, {primeiro_nome}! Sentimos sua falta. Quando for melhor para você, reservamos um novo horário. Tenho disponibilidade em {data}. Fica bom?'),
+     'Olá, {primeiro_nome}! Tudo bem? Vi que você precisou desmarcar sua consulta. Quando for melhor para você, encontramos um novo horário — é só me dizer os dias que ficam mais fáceis.'),
     (c, 'reativacao', 'Reativação de paciente',
      'Olá, {primeiro_nome}! Há algum tempo não nos vemos no Instituto CG. Que tal agendarmos uma visita para cuidarmos do seu sorriso?'),
     (c, 'acompanhar_decisao', 'Acompanhando a decisão',
@@ -357,7 +342,46 @@ begin
     (c, 'manutencao', 'Manutenção',
      'Olá, {primeiro_nome}! Está chegando a hora da sua manutenção de {procedimento}. Vamos agendar um horário?'),
     (c, 'agendar_tratamento', 'Início do tratamento',
-     'Olá, {primeiro_nome}! Que alegria ter você conosco. Vamos combinar a data de início do seu tratamento?');
+     'Olá, {primeiro_nome}! Que alegria ter você conosco. Vamos combinar a data de início do seu tratamento?'),
+    (c, 'pos_tratamento', 'Revisão após o tratamento',
+     'Olá, {primeiro_nome}! Tudo bem? Já faz um tempinho desde o seu tratamento no Instituto CG. Que tal agendarmos uma revisão para cuidarmos do resultado?');
+
+  -- Regras de follow-up (tudo editável em Configurações).
+  --   prazo_dias: 1ª ação N dias após o evento · intervalos: novas tentativas (dias após a anterior)
+  --   ao_esgotar: o que fazer se continuar sem resposta
+  insert into public.regras_followup (clinica_id, situacao, nome, quando, ativa, tipo_tarefa, titulo_modelo,
+                                      prazo_dias, intervalos, prioridade, ao_esgotar, espera_reativacao_dias,
+                                      periodo_meses, mensagem_situacao) values
+    (c, 'novo_contato', 'Novo lead', 'Quando alguém é cadastrado como novo contato', true,
+     'primeiro_contato', 'Fazer o primeiro contato com {primeiro_nome}', 0, '{1,2}', 'urgente', 'sem_resposta', null, null, 'primeiro_contato'),
+    (c, 'em_contato', 'Demonstrou interesse', 'Quando a pessoa responde com interesse', true,
+     'follow_up', 'Conduzir {primeiro_nome} para a avaliação', 1, '{3,4}', 'alta', 'sem_resposta', null, null, 'follow_up'),
+    (c, 'confirmacao', 'Confirmar consulta', 'Quando uma avaliação ou consulta é agendada (prazo = dias úteis antes)', true,
+     'confirmar_agendamento', 'Confirmar {consulta} de {primeiro_nome}', 1, '{}', 'normal', 'decidir', null, null, 'confirmar_agendamento'),
+    (c, 'compareceu', 'Compareceu à avaliação', 'Quando a pessoa comparece à avaliação', true,
+     'apresentar_orcamento', 'Registrar o orçamento de {primeiro_nome}', 0, '{}', 'alta', 'decidir', null, null, 'apresentar_orcamento'),
+    (c, 'orcamento_apresentado', 'Orçamento enviado', 'Quando o orçamento é apresentado', true,
+     'follow_up_orcamento', 'Retornar {primeiro_nome} sobre {procedimento}', 3, '{4,7}', 'alta', 'sem_resposta', null, null, 'follow_up_orcamento'),
+    (c, 'pensando', 'Paciente está pensando', 'Quando a pessoa diz que vai pensar', true,
+     'acompanhar_decisao', 'Acompanhar a decisão de {primeiro_nome}', 4, '{6,10}', 'normal', 'sem_resposta', null, null, 'acompanhar_decisao'),
+    (c, 'desmarcou', 'Paciente desmarcou', 'Quando uma consulta é desmarcada', true,
+     'recuperar_desmarcacao', 'Entrar em contato com {primeiro_nome} para remarcar', 1, '{3,4}', 'urgente', 'sem_resposta', null, null, 'recuperar_desmarcacao'),
+    (c, 'faltou', 'Paciente faltou', 'Quando a pessoa não comparece à consulta', true,
+     'recuperar_falta', 'Entrar em contato com {primeiro_nome} para remarcar', 1, '{2,3}', 'urgente', 'sem_resposta', null, null, 'recuperar_falta'),
+    (c, 'sem_resposta', 'Parou de responder', 'Quando as tentativas terminam sem resposta', true,
+     'reabrir_sem_resposta', 'Tentar novo contato com {primeiro_nome}', 7, '{14}', 'normal', 'reativacao', 60, null, 'reabrir_sem_resposta'),
+    (c, 'nao_fechou', 'Não fechou', 'Quando a negociação não fecha — o prazo vem do motivo informado', true,
+     'retorno_por_motivo', 'Retomar conversa com {primeiro_nome} sobre {procedimento}', null, '{}', 'baixa', 'decidir', null, null, 'retorno_por_motivo'),
+    (c, 'fechou', 'Fechou', 'Quando a pessoa fecha o tratamento', true,
+     'agendar_tratamento', 'Agendar o início do tratamento de {primeiro_nome}', 0, '{}', 'alta', 'decidir', null, null, 'agendar_tratamento'),
+    (c, 'reativacao', 'Reativação', 'Quando a pessoa entra na etapa Reativação', true,
+     'reativacao', 'Retomar contato com {primeiro_nome}', 0, '{21}', 'baixa', 'decidir', null, null, 'reativacao'),
+    (c, 'paciente_inativo', 'Pacientes antigos sem atendimento', 'Pacientes sem atendimento há X meses (rotina diária, com limite por dia)', false,
+     'reativacao', 'Reativar contato com {primeiro_nome}', 0, '{21}', 'baixa', 'decidir', null, 6, 'reativacao'),
+    (c, 'manutencao', 'Manutenção devida', 'Tratamentos com retorno periódico (ex.: limpeza a cada 6 meses)', false,
+     'manutencao', 'Lembrar {primeiro_nome} da manutenção', 0, '{21}', 'baixa', 'decidir', null, null, 'manutencao'),
+    (c, 'pos_tratamento', 'Retorno após o tratamento', 'X meses depois de o tratamento ser concluído', true,
+     'manutencao', 'Convidar {primeiro_nome} para a revisão', 0, '{21}', 'normal', 'decidir', null, 6, 'pos_tratamento');
 
   return c;
 end;
