@@ -211,8 +211,8 @@ describe("textos do cartão", () => {
     expect(acaoRecomendada(t, HOJE)).toBe("Registrar se Ana compareceu à consulta.");
   });
 
-  it("sem mensagem sugerida não mostra o botão 'Ver mensagem'", () => {
-    expect(montarCartao(tarefa({ mensagem_sugerida: null }), HOJE).botoes).not.toContain("ver_mensagem");
+  it("mesmo sem mensagem guardada na tarefa, 'Ver mensagem' aparece (a biblioteca sugere uma)", () => {
+    expect(montarCartao(tarefa({ mensagem_sugerida: null }), HOJE).botoes).toContain("ver_mensagem");
   });
 
   it("rótulos de data", () => {

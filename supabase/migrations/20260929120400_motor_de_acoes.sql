@@ -174,7 +174,11 @@ $$;
 
 -- ─── Mensagens sugeridas ─────────────────────────────────────────────────────
 
--- Substitui {primeiro_nome}, {procedimento}, {consulta}, {data}, {horario} e {valor}.
+-- Preenche as variáveis da mensagem com os dados do CRM. Aceita {{nome}} (biblioteca de
+-- mensagens) e a forma curta {primeiro_nome} (títulos de tarefa).
+--   {{nome}} primeiro nome (ou como prefere ser chamada) · {{nome_completo}} · {{procedimento}}
+--   {{consulta}} "a avaliação" · {{data}} · {{horario}} · {{dentista}} · {{valor}} · {{vencimento}}
+--   {{clinica}}
 create or replace function public.renderizar_texto(
   p_texto        text,
   p_pessoa       uuid,
@@ -185,20 +189,76 @@ returns text
 language plpgsql stable security definer set search_path = public
 as $$
 declare
-  v_nome  text;
-  v_texto text := p_texto;
+  v_nome     text;
+  v_completo text;
+  v_clinica  text;
+  v_texto    text := p_texto;
+  v_valores  jsonb;
+  k          text;
 begin
   if v_texto is null then return null; end if;
-  select coalesce(nullif(apelido_tratamento, ''), split_part(nome, ' ', 1)) into v_nome
-    from public.pessoas where id = p_pessoa;
-  v_texto := replace(v_texto, '{primeiro_nome}', coalesce(v_nome, ''));
-  v_texto := replace(v_texto, '{procedimento}', coalesce(lower(p_procedimento), 'o seu tratamento'));
-  v_texto := replace(v_texto, '{consulta}', coalesce(p_extras ->> 'consulta', 'a consulta'));
-  v_texto := replace(v_texto, '{data}', coalesce(p_extras ->> 'data', ''));
-  v_texto := replace(v_texto, '{horario}', coalesce(p_extras ->> 'horario', ''));
-  v_texto := replace(v_texto, '{valor}', coalesce(p_extras ->> 'valor', ''));
+  select coalesce(nullif(p.apelido_tratamento, ''), split_part(p.nome, ' ', 1)), p.nome, c.nome
+    into v_nome, v_completo, v_clinica
+    from public.pessoas p join public.clinicas c on c.id = p.clinica_id where p.id = p_pessoa;
+  v_valores := jsonb_build_object(
+    'nome', coalesce(v_nome, ''),
+    'primeiro_nome', coalesce(v_nome, ''),
+    'nome_completo', coalesce(v_completo, ''),
+    'procedimento', coalesce(lower(coalesce(p_procedimento, p_extras ->> 'procedimento')), 'o seu tratamento'),
+    'consulta', coalesce(p_extras ->> 'consulta', 'a consulta'),
+    'data', coalesce(p_extras ->> 'data', ''),
+    'horario', coalesce(p_extras ->> 'horario', ''),
+    'dentista', coalesce(p_extras ->> 'dentista', 'a doutora'),
+    'valor', coalesce(p_extras ->> 'valor', ''),
+    'vencimento', coalesce(p_extras ->> 'vencimento', p_extras ->> 'data', ''),
+    'clinica', coalesce(v_clinica, 'clínica'));
+  for k in select jsonb_object_keys(v_valores) loop
+    v_texto := replace(v_texto, '{{' || k || '}}', v_valores ->> k);
+    v_texto := replace(v_texto, '{' || k || '}', v_valores ->> k);
+  end loop;
   return v_texto;
 end;
+$$;
+
+-- Tarefa/regra → categoria da biblioteca de mensagens.
+create or replace function public.categoria_mensagem(p_chave text)
+returns text
+language sql immutable
+as $$
+  select case p_chave
+    when 'primeiro_contato' then 'primeiro_contato'
+    when 'follow_up' then 'primeiro_contato'
+    when 'acompanhar_decisao' then 'pos_consulta'
+    when 'follow_up_orcamento' then 'pos_consulta'
+    when 'apresentar_orcamento' then 'pos_consulta'
+    when 'retorno_por_motivo' then 'nao_fechou'
+    when 'reabrir_sem_resposta' then 'sem_resposta'
+    when 'recuperar_desmarcacao' then 'desmarcou'
+    when 'recuperar_falta' then 'desmarcou'
+    when 'confirmar_agendamento' then 'confirmacao'
+    when 'clinica_cancelou' then 'remarcacao'
+    when 'reativacao' then 'reativacao'
+    when 'pos_tratamento' then 'pos_atendimento'
+    when 'agendar_tratamento' then 'pos_atendimento'
+    when 'confirmar_pagamento' then 'pagamento_previsto'
+    when 'manutencao' then 'paciente_antigo'
+    else p_chave
+  end;
+$$;
+
+-- Escolhe o modelo da biblioteca para uma situação: o específico do procedimento e da
+-- tarefa primeiro; depois o da tarefa; depois o padrão da categoria.
+create or replace function public.escolher_modelo(p_clinica uuid, p_chave text, p_procedimento text default null)
+returns public.modelos_mensagem
+language sql stable security definer set search_path = public
+as $$
+  select m.* from public.modelos_mensagem m
+    left join public.procedimentos pr on pr.id = m.procedimento_id
+   where m.clinica_id = p_clinica and m.ativo
+     and (m.situacao = p_chave or m.categoria = public.categoria_mensagem(p_chave))
+     and (m.procedimento_id is null or lower(pr.nome) = lower(p_procedimento))
+   order by (m.procedimento_id is not null) desc, (m.situacao is not distinct from p_chave) desc, m.padrao desc, m.criado_em
+   limit 1;
 $$;
 
 create or replace function public.renderizar_mensagem(
@@ -211,10 +271,8 @@ create or replace function public.renderizar_mensagem(
 returns text
 language sql stable security definer set search_path = public
 as $$
-  select public.renderizar_texto(
-    (select texto from public.modelos_mensagem
-      where clinica_id = p_clinica and situacao = p_situacao and ativo order by criado_em limit 1),
-    p_pessoa, p_procedimento, p_extras);
+  select public.renderizar_texto((public.escolher_modelo(p_clinica, p_situacao, p_procedimento)).texto,
+                                 p_pessoa, p_procedimento, p_extras);
 $$;
 
 -- ─── Criação de tarefas automáticas ──────────────────────────────────────────
@@ -728,7 +786,8 @@ begin
     perform public.criar_por_regra(
       'confirmacao', new.pessoa_id, new.oportunidade_id, 'ag:' || new.id, p_vence => v_quando,
       p_agendamento => new.id,
-      p_extras => jsonb_build_object('consulta', v_rotulo, 'data', to_char(v_dia, 'DD/MM'), 'horario', v_hora));
+      p_extras => jsonb_build_object('consulta', v_rotulo, 'data', to_char(v_dia, 'DD/MM'), 'horario', v_hora,
+                    'dentista', (select nome from public.profissionais where id = new.profissional_id)));
   end if;
   return null;
 end;

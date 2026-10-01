@@ -411,7 +411,7 @@ export function montarCartao(t: TarefaAberta, hoje: DataCivil): Cartao {
   } else {
     botoes = ["abrir_paciente", "ver_mensagem", "registrar_contato", "concluir"];
   }
-  if (!t.mensagem_sugerida) botoes = botoes.filter((b) => b !== "ver_mensagem");
+  // A mensagem vem da biblioteca mesmo quando a tarefa não guardou uma.
 
   return {
     id: t.id,

@@ -187,7 +187,7 @@ export function NovaCampanha({
           <Campo rotulo="Nome da campanha">
             <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} placeholder="Ex.: Revisão de fim de ano" className={CAMPO} />
           </Campo>
-          <Campo rotulo="Mensagem sugerida" ajuda="Use {primeiro_nome} e {procedimento}. Cada mensagem é revisada e enviada por você.">
+          <Campo rotulo="Mensagem sugerida" ajuda="Use {{nome}} e {{procedimento}}. Cada mensagem é revisada e enviada por você.">
             <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={4} maxLength={2000} className={CAMPO} />
           </Campo>
           <p className="mt-2 rounded-lg bg-fundo px-3.5 py-2.5 text-sm text-suave">

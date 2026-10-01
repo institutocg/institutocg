@@ -9,21 +9,21 @@ export const SEGMENTOS: Record<Segmento, { rotulo: string; ajuda: string; mesesP
     ajuda: "Pacientes antigos que não vêm à clínica há alguns meses.",
     mesesPadrao: 6,
     mensagem:
-      "Olá, {primeiro_nome}! Tudo bem? Sentimos sua falta aqui no Instituto CG. Que tal agendarmos uma avaliação para cuidarmos do seu sorriso?",
+      "Olá, {{nome}}! Tudo bem? Sentimos sua falta aqui no {{clinica}}. Que tal agendarmos uma avaliação para cuidarmos do seu sorriso?",
   },
   procedimento: {
     rotulo: "Quem fez um procedimento",
     ajuda: "Ex.: clareamento há mais de 12 meses — hora do retoque.",
     mesesPadrao: 12,
     mensagem:
-      "Olá, {primeiro_nome}! Já faz um tempo desde o seu {procedimento}. Que tal agendarmos uma revisão para manter o resultado?",
+      "Olá, {{nome}}! Já faz um tempo desde o seu {{procedimento}}. Que tal agendarmos uma revisão para manter o resultado?",
   },
   nao_fecharam: {
     rotulo: "Quem não fechou",
     ajuda: "Negociações encerradas há alguns meses. Muitos voltam quando o momento muda.",
     mesesPadrao: 3,
     mensagem:
-      "Olá, {primeiro_nome}! Tudo bem? Lembrei de você e quis saber se ainda tem interesse em {procedimento}. Se quiser, podemos conversar sobre as possibilidades, sem compromisso.",
+      "Olá, {{nome}}! Tudo bem? Lembrei de você e quis saber se ainda tem interesse em {{procedimento}}. Se quiser, podemos conversar sobre as possibilidades, sem compromisso.",
   },
 };
 

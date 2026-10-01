@@ -418,10 +418,11 @@ begin
                    || coalesce(' · ' || v_forma, '')
                    || case when new.valor_pago_centavos > 0
                            then ' · já pago ' || public.formatar_brl(new.valor_pago_centavos) else '' end;
-    v_mensagem := 'Olá, ' || split_part(v_pessoa.nome, ' ', 1) || '! Tudo bem? '
-                  || 'Passando para lembrar, com carinho, do pagamento de ' || public.formatar_brl(v_saldo)
-                  || ' previsto para ' || to_char(new.vencimento, 'DD/MM') || '. '
-                  || 'Qualquer dúvida, estou à disposição.';
+    -- Mensagem da biblioteca ("Pagamento previsto"); o painel troca por cobrança amigável
+    -- ou pagamento pendente conforme o atraso.
+    v_mensagem := public.renderizar_mensagem(new.clinica_id, 'confirmar_pagamento', new.pessoa_id, null,
+                    jsonb_build_object('valor', public.formatar_brl(v_saldo),
+                                       'vencimento', to_char(new.vencimento, 'DD/MM')));
 
     update public.tarefas
        set titulo = v_titulo, descricao = v_descricao, vence_em = new.vencimento,

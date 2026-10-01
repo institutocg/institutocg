@@ -263,19 +263,36 @@ create table public.formas_pagamento (
   check (permite_parcelamento or max_parcelas = 1)
 );
 
--- Modelos de mensagem (WhatsApp) com variáveis: {primeiro_nome}, {procedimento}, {data}, {horario}, {valor}.
+-- Biblioteca de mensagens prontas, organizada por categoria (situação).
+-- Variáveis preenchidas pelo CRM: {{nome}}, {{nome_completo}}, {{procedimento}}, {{consulta}},
+-- {{data}}, {{horario}}, {{dentista}}, {{valor}}, {{vencimento}}, {{clinica}}.
+-- Nada é enviado automaticamente: a mensagem é sugerida para a usuária copiar e adaptar.
 create table public.modelos_mensagem (
-  id             uuid primary key default gen_random_uuid(),
-  clinica_id     uuid not null references public.clinicas (id),
-  situacao       text not null,
-  titulo         text not null,
-  texto          text not null check (length(texto) between 1 and 2000),
-  canal          text not null default 'whatsapp',
-  ativo          boolean not null default true,
-  criado_em      timestamptz not null default now(),
-  atualizado_em  timestamptz not null default now(),
-  unique (clinica_id, id)
+  id               uuid primary key default gen_random_uuid(),
+  clinica_id       uuid not null references public.clinicas (id),
+  categoria        text not null check (categoria in (
+                     'primeiro_contato', 'pos_consulta', 'nao_fechou', 'sem_resposta', 'desmarcou',
+                     'confirmacao', 'remarcacao', 'reativacao', 'pos_atendimento', 'cobranca_amigavel',
+                     'pagamento_pendente', 'pagamento_previsto', 'paciente_antigo')),
+  -- Tarefa/regra que usa este modelo de preferência (opcional; ex.: 'recuperar_falta').
+  situacao         text,
+  -- Modelo específico de um procedimento (opcional): tem preferência para quem negocia esse procedimento.
+  procedimento_id  uuid,
+  titulo           text not null check (length(btrim(titulo)) between 2 and 80),
+  texto            text not null check (length(texto) between 1 and 2000),
+  -- O modelo sugerido na categoria (um por categoria e procedimento).
+  padrao           boolean not null default false,
+  canal            text not null default 'whatsapp',
+  ativo            boolean not null default true,
+  criado_por       uuid default auth.uid(),
+  criado_em        timestamptz not null default now(),
+  atualizado_em    timestamptz not null default now(),
+  unique (clinica_id, id),
+  foreign key (clinica_id, procedimento_id) references public.procedimentos (clinica_id, id)
 );
+create unique index modelos_mensagem_padrao on public.modelos_mensagem
+  (clinica_id, categoria, coalesce(procedimento_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  where padrao and ativo;
 
 -- ─── Auditoria ───────────────────────────────────────────────────────────────
 
@@ -401,7 +418,7 @@ declare
 begin
   foreach t in array array[
     'profissionais', 'procedimentos', 'origens', 'etapas_funil', 'motivos',
-    'formas_pagamento', 'modelos_mensagem'
+    'formas_pagamento'
   ] loop
     execute format(
       'create policy catalogo_ler on public.%I for select to authenticated
@@ -415,6 +432,15 @@ begin
   end loop;
 end;
 $$;
+
+-- Mensagens prontas: toda a equipe usa, cria e edita (não há exclusão: desativa-se).
+create policy membro_ler on public.modelos_mensagem for select to authenticated
+  using (clinica_id in (select public.minhas_clinicas()));
+create policy membro_inserir on public.modelos_mensagem for insert to authenticated
+  with check (clinica_id in (select public.minhas_clinicas()));
+create policy membro_alterar on public.modelos_mensagem for update to authenticated
+  using (clinica_id in (select public.minhas_clinicas()))
+  with check (clinica_id in (select public.minhas_clinicas()));
 
 -- Auditoria: somente leitura, somente administradora. Escrita apenas via gatilho.
 create policy auditoria_ler on public.auditoria for select to authenticated

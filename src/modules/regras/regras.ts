@@ -3,6 +3,7 @@
  * Funções puras — a mesma explicação que o banco mostra no funil.
  */
 import { z } from "zod";
+import { preencherExemplo } from "@/modules/mensagens/mensagens";
 
 export type Situacao =
   | "novo_contato"
@@ -173,11 +174,6 @@ export type DadosRegra = z.input<typeof esquemaRegra>;
 
 /** Mostra como o texto fica para uma pessoa de exemplo. */
 export function exemplo(texto: string, procedimento = "clareamento dental"): string {
-  return texto
-    .replaceAll("{primeiro_nome}", "Maria")
-    .replaceAll("{procedimento}", procedimento)
-    .replaceAll("{consulta}", "a avaliação")
-    .replaceAll("{data}", "15/10")
-    .replaceAll("{horario}", "14:30")
-    .replaceAll("{valor}", "R$ 1.000,00");
+  // Mesmos exemplos da biblioteca de mensagens; aceita {{nome}} e {primeiro_nome}.
+  return preencherExemplo(texto.replaceAll("{procedimento}", procedimento).replaceAll("{{procedimento}}", procedimento));
 }

@@ -101,7 +101,7 @@ function JanelaRegra({ regra, aoFechar }: { regra: Regra; aoFechar: () => void }
         Regra ligada (criar a tarefa automaticamente)
       </label>
 
-      <Campo rotulo="Tarefa criada" ajuda={`Ex.: “${exemplo(titulo)}”. Use {primeiro_nome} e {procedimento}.`}>
+      <Campo rotulo="Tarefa criada" ajuda={`Ex.: “${exemplo(titulo)}”. Use {primeiro_nome} e {procedimento}. A mensagem também está em Mensagens prontas.`}>
         <input value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={200} className={CAMPO} />
       </Campo>
 

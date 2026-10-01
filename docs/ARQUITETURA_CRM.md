@@ -1018,6 +1018,16 @@ A agenda conversa com o CRM. **Nova consulta:** paciente (busca por nome ou tele
 
 **Dentistas:** a clínica passou a ter três dentistas (a dona e mais duas); cadastro em Configurações. Toda consulta pede a dentista — também quando marcada pelo funil ou pelo painel (a pedido da clínica, sem dentista padrão); ao remarcar uma recuperação, sugere a mesma dentista.
 
+## 14.7 Mensagens prontas (implementado)
+
+Seção **Mensagens prontas** (menu "Mensagens"), organizada por situação: primeiro contato; passou pela primeira consulta (pensando); paciente não fechou; sem resposta; desmarcou; confirmação; remarcação; reativação; acompanhamento pós-atendimento; cobrança amigável; pagamento pendente; pagamento previsto; paciente antigo. Tom elegante, cordial, humano, próximo e profissional — sem urgência artificial ou pressão.
+
+- **Variáveis** em todas as mensagens (`{{nome}}`, `{{procedimento}}`, `{{data}}`, `{{horario}}`, `{{dentista}}`, `{{valor}}`, `{{vencimento}}`, `{{clinica}}`…), preenchidas pelo CRM; na biblioteca, "Preencher para" mostra todas já com os dados de um paciente.
+- Botões **COPIAR MENSAGEM**, **Adaptar antes de copiar** (editar o texto e abrir no WhatsApp), **EDITAR MENSAGEM** e **CRIAR NOVA MENSAGEM** (situação, procedimento opcional, inserção de variáveis com um clique, prévia e "sugerir automaticamente nesta situação"). Mensagens são arquivadas, não apagadas.
+- **Sugestão pela tarefa**: em "Ver mensagem" no painel aparece o contexto (ex.: "Recebeu o orçamento de R$ 14.000,00 na consulta há 7 dias"), a situação e a mensagem sugerida já preenchida; é possível trocar por outra mensagem pronta e adaptar antes de copiar. Pagamentos escolhem entre previsto, cobrança amigável e pendente conforme o atraso.
+- Mensagens específicas por **procedimento** têm preferência para quem negocia aquele procedimento.
+- **Nunca enviadas automaticamente**: o CRM só apresenta; a usuária copia, adapta e envia pelo canal que preferir.
+
 ## 15. Decisões pendentes
 
 **Decidido:**

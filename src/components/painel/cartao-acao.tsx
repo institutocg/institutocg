@@ -13,10 +13,13 @@ import {
   type DadosRegistro,
   type Retorno,
 } from "@/app/(app)/hoje/acoes";
+import { sugestoesDaTarefa } from "@/app/(app)/mensagens/acoes";
 import { avisar } from "@/components/avisos";
+import { copiarTexto } from "@/components/mensagens/biblioteca";
 import { Dialogo } from "@/components/dialogo";
 import { formatarMoeda } from "@/lib/moeda";
 import { linkWhatsApp } from "@/lib/telefone";
+import { ROTULO_CATEGORIA, type Sugestao } from "@/modules/mensagens/mensagens";
 import type { Motivo } from "@/modules/painel/consultas";
 import type { Cartao, Grupo } from "@/modules/painel/painel";
 
@@ -294,22 +297,81 @@ function JanelaEditar({
 // ─── Janela: mensagem sugerida ──────────────────────────────────────────────
 
 function JanelaMensagem({ cartao, aberto, aoFechar }: { cartao: Cartao; aberto: boolean; aoFechar: () => void }) {
+  const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null);
+  const [escolhida, setEscolhida] = useState("tarefa");
   const [texto, setTexto] = useState(cartao.mensagem ?? "");
   const [copiado, setCopiado] = useState(false);
 
+  // A biblioteca preenchida para esta tarefa (a recomendada primeiro).
+  useEffect(() => {
+    if (!aberto || sugestoes) return;
+    sugestoesDaTarefa(cartao.id).then((lista) => {
+      setSugestoes(lista);
+      const rec = lista.find((s) => s.recomendada);
+      // Pagamentos mudam com o atraso (previsto → cobrança amigável → pendente): usa a recomendada de agora.
+      if (rec && (cartao.pagamento || !cartao.mensagem)) {
+        setEscolhida(rec.modelo_id);
+        setTexto(rec.texto);
+      }
+    });
+  }, [aberto, sugestoes, cartao.id, cartao.pagamento, cartao.mensagem]);
+
+  const recomendada = sugestoes?.find((s) => s.recomendada);
+  const mesma = sugestoes?.filter((s) => s.mesma_categoria) ?? [];
+  const outras = sugestoes?.filter((s) => !s.mesma_categoria) ?? [];
+
+  function trocar(id: string) {
+    setEscolhida(id);
+    if (id === "tarefa") setTexto(cartao.mensagem ?? "");
+    else setTexto(sugestoes?.find((s) => s.modelo_id === id)?.texto ?? "");
+  }
+
   async function copiar() {
-    try {
-      await navigator.clipboard.writeText(texto);
+    if (await copiarTexto(texto)) {
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
-    } catch {
-      avisar("Não foi possível copiar. Selecione o texto e copie manualmente.", "erro");
     }
   }
 
   return (
     <Dialogo aberto={aberto} aoFechar={aoFechar} titulo="Mensagem sugerida" subtitulo={cartao.subtitulo ?? cartao.titulo}>
-      <label className="block">
+      <p className="rounded-lg bg-fundo px-3.5 py-2.5 text-sm text-suave">
+        <span className="text-grafite">{cartao.pagamento ? cartao.titulo : cartao.motivo}</span>
+        {recomendada && (
+          <span className="mt-0.5 block text-xs text-sutil">
+            Situação: {ROTULO_CATEGORIA[recomendada.categoria]} · sugerida: “{recomendada.titulo}”
+          </span>
+        )}
+      </p>
+      {sugestoes && sugestoes.length > 0 && (
+        <label className="mt-4 block">
+          <span className="text-xs text-suave">Usar outra mensagem pronta</span>
+          <select
+            value={escolhida}
+            onChange={(e) => trocar(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-borda-forte bg-superficie px-3 py-2 text-sm outline-none focus:border-dourado"
+          >
+            {cartao.mensagem && <option value="tarefa">Mensagem desta tarefa</option>}
+            <optgroup label="Desta situação">
+              {mesma.map((m) => (
+                <option key={m.modelo_id} value={m.modelo_id}>
+                  {m.titulo}
+                  {m.recomendada ? " (sugerida)" : ""}
+                  {m.procedimento ? ` · ${m.procedimento}` : ""}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Outras situações">
+              {outras.map((m) => (
+                <option key={m.modelo_id} value={m.modelo_id}>
+                  {ROTULO_CATEGORIA[m.categoria]} — {m.titulo}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+      )}
+      <label className="mt-4 block">
         <span className="text-xs text-suave">Você pode ajustar o texto antes de enviar.</span>
         <textarea
           value={texto}
@@ -319,8 +381,11 @@ function JanelaMensagem({ cartao, aberto, aoFechar }: { cartao: Cartao; aberto: 
         />
       </label>
       <Rodape>
+        <Link href="/mensagens" className="mr-auto text-sm text-dourado-escuro underline-offset-4 hover:underline">
+          Biblioteca de mensagens
+        </Link>
         <Botao onClick={copiar} icone={copiado ? <Check className="size-4" /> : <Copy className="size-4" />}>
-          {copiado ? "Copiado" : "Copiar"}
+          {copiado ? "Copiada" : "Copiar mensagem"}
         </Botao>
         {cartao.whatsapp ? (
           <a
@@ -336,7 +401,7 @@ function JanelaMensagem({ cartao, aberto, aoFechar }: { cartao: Cartao; aberto: 
         )}
       </Rodape>
       <p className="mt-3 text-xs text-sutil">
-        Depois de enviar, use <strong>Registrar contato</strong> para anotar a resposta.
+        A mensagem nunca é enviada pelo sistema. Depois de enviar, use <strong>Registrar contato</strong> para anotar a resposta.
       </p>
     </Dialogo>
   );

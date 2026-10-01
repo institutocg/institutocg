@@ -15,6 +15,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260929120500_resgate.sql` | `criar_resgate()` (tarefa de manutenção/reativação sob demanda para paciente antigo) e `sem_acento()` para a busca |
 | `20260930130000_tratamento_e_campanhas.sql` | Fechou → "em tratamento"; `concluir_tratamento()` (agenda o convite de retorno); campanhas de reativação (`prever_campanha`, `criar_campanha`, `encerrar_campanha`, visão `v_campanhas`) |
 | `20261001120000_agenda.sql` | **Agenda comercial**: `agendar()` (paciente existente ou novo, procedimento, data, horário, dentista, status; horário de atendimento e conflito por dentista), `desmarcar_consulta()`, `remarcar_consulta()`, `mudar_status_consulta()`, `buscar_pacientes()`, garantia de recuperação e visões `v_agenda` e `v_recuperacao` |
+| `20261002120000_mensagens.sql` | **Mensagens prontas**: variáveis de cada tarefa/paciente (`variaveis_tarefa`, `variaveis_pessoa`), situação da mensagem (pagamentos mudam com o atraso), `sugestoes_mensagem(tarefa)` e `mensagens_para_pessoa(pessoa)`; um modelo padrão por situação e procedimento |
 
 ## Motor de ações — regras de follow-up configuráveis
 
@@ -61,6 +62,15 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 
 **Dentistas:** cadastradas em Configurações (nome, cor, se atende). Com mais de uma dentista ativa, toda consulta pede a escolha — na agenda, no funil (avaliação com data) e no "Registrar contato" do painel (`dentista_escolhida()`); na remarcação de uma recuperação, a sugestão é a mesma dentista da consulta perdida. Conflito de horário só com a mesma dentista; desativar exige remarcar as consultas futuras.
 
+## Mensagens prontas
+
+`modelos_mensagem` guarda a biblioteca, em 13 situações (primeiro contato, passou pela primeira consulta, não fechou, sem resposta, desmarcou, confirmação, remarcação, reativação, pós-atendimento, cobrança amigável, pagamento pendente, pagamento previsto e paciente antigo). Cada modelo pode ser associado a um **procedimento** e/ou a uma **tarefa** (`situacao`), e um deles é o **sugerido** da situação.
+
+- **Variáveis** preenchidas pelo CRM: `{{nome}}` (como a pessoa prefere ser chamada), `{{nome_completo}}`, `{{procedimento}}`, `{{consulta}}`, `{{data}}`, `{{horario}}`, `{{dentista}}`, `{{valor}}`, `{{vencimento}}`, `{{clinica}}` (a forma curta `{primeiro_nome}` continua valendo nos títulos).
+- **Sugestão automática**: para cada tarefa, `escolher_modelo()` prefere o modelo do procedimento, depois o da tarefa, depois o sugerido da situação. Lembretes de pagamento mudam com o atraso: *pagamento previsto* (até o vencimento) → *cobrança amigável* (até 7 dias) → *pagamento pendente*.
+- **Nada é enviado automaticamente**: a mensagem é apresentada para copiar, adaptar e enviar pelo canal que a usuária preferir.
+- Toda a equipe cria e edita mensagens (sem exclusão: arquiva-se); alterações vão para a auditoria.
+
 ## Onde está cada requisito
 
 | Requisito | Onde |
@@ -93,7 +103,7 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 npm run test:db    # sobe um PostgreSQL temporário, aplica as migrações, o seed e os testes
 ```
 
-Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, `18_regras_e_campanhas.sql` e `19_agenda.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
+Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, `18_regras_e_campanhas.sql`, `19_agenda.sql` e `21_mensagens.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
 
 ## Implantação no Supabase (quando formos para produção)
 

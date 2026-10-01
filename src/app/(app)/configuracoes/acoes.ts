@@ -41,7 +41,8 @@ export async function salvarRegra(dados: DadosRegra): Promise<Retorno> {
         );
         if (!atualizada.rowCount) {
           await db.query(
-            "insert into public.modelos_mensagem (clinica_id, situacao, titulo, texto) values ($1, $2, $3, $4)",
+            `insert into public.modelos_mensagem (clinica_id, categoria, situacao, titulo, texto, padrao)
+             values ($1, public.categoria_mensagem($2), $2, $3, $4, false)`,
             [sessao.clinicaId, situacao, rows[0].nome, v.mensagem],
           );
         }

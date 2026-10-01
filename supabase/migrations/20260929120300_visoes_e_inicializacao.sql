@@ -314,39 +314,66 @@ begin
     (c, 'Transferência bancária', true,  24, 5),
     (c, 'Boleto',                 true,  24, 6);
 
-  insert into public.modelos_mensagem (clinica_id, situacao, titulo, texto) values
-    (c, 'primeiro_contato', 'Primeiro contato',
-     'Olá, {primeiro_nome}! Aqui é do Instituto CG. Recebemos o seu interesse em {procedimento} e será um prazer conversar com você. Qual o melhor horário para falarmos?'),
-    (c, 'confirmar_agendamento', 'Confirmação de avaliação',
-     'Olá, {primeiro_nome}! Passando para confirmar a sua avaliação no Instituto CG em {data}, às {horario}. Podemos confirmar?'),
-    (c, 'follow_up_orcamento', 'Acompanhamento do orçamento',
-     'Olá, {primeiro_nome}! Tudo bem? Fico à disposição caso tenha ficado alguma dúvida sobre o planejamento de {procedimento}. Se preferir, podemos conversar com calma.'),
-    (c, 'recuperar_desmarcacao', 'Paciente desmarcou',
-     'Olá, {primeiro_nome}! Tudo bem? Vi que você precisou desmarcar {consulta} do dia {data}. Sem problema! Quando for melhor para você, encontramos um novo horário — é só me dizer os dias e horários que ficam mais fáceis.'),
-    (c, 'reativacao', 'Reativação de paciente',
-     'Olá, {primeiro_nome}! Há algum tempo não nos vemos no Instituto CG. Que tal agendarmos uma visita para cuidarmos do seu sorriso?'),
-    (c, 'acompanhar_decisao', 'Depois da consulta',
-     'Olá, {primeiro_nome}! Tudo bem? Foi um prazer receber você na consulta. Sei que é uma decisão importante: se ficou alguma dúvida sobre {procedimento}, estou por aqui para ajudar — sem pressa.'),
-    (c, 'apresentar_orcamento', 'Após a avaliação',
-     'Olá, {primeiro_nome}! Foi um prazer receber você hoje. Qualquer dúvida sobre o que conversamos, estou à disposição.'),
-    (c, 'confirmar_pagamento', 'Lembrete de pagamento',
-     'Olá, {primeiro_nome}! Tudo bem? Passando para lembrar, com carinho, do pagamento de {valor} previsto para {data}. Qualquer dúvida, estou à disposição.'),
-    (c, 'clinica_cancelou', 'A clínica cancelou o horário',
-     'Olá, {primeiro_nome}! Tudo bem? Precisamos reagendar {consulta} do dia {data} — pedimos desculpas pelo transtorno. Qual dia e horário ficam melhores para você?'),
-    (c, 'recuperar_falta', 'Paciente faltou',
-     'Olá, {primeiro_nome}! Sentimos sua falta na consulta do dia {data}. Está tudo bem? Se quiser, reservo um novo horário para você — é só me dizer o melhor dia.'),
-    (c, 'follow_up', 'Acompanhamento',
-     'Olá, {primeiro_nome}! Tudo bem? Passando para saber se posso ajudar com alguma informação sobre {procedimento}.'),
-    (c, 'retorno_por_motivo', 'Retomar conversa',
-     'Olá, {primeiro_nome}! Tudo bem? Lembrei de você e quis saber como está. Se ainda tiver interesse em {procedimento}, podemos conversar sobre as possibilidades.'),
-    (c, 'reabrir_sem_resposta', 'Retomar contato',
-     'Olá, {primeiro_nome}! Tudo bem? Faz um tempo que conversamos sobre {procedimento}. Se fizer sentido para você, estou à disposição.'),
-    (c, 'manutencao', 'Manutenção',
-     'Olá, {primeiro_nome}! Está chegando a hora da sua manutenção de {procedimento}. Vamos agendar um horário?'),
-    (c, 'agendar_tratamento', 'Início do tratamento',
-     'Olá, {primeiro_nome}! Que alegria ter você conosco. Vamos combinar a data de início do seu tratamento?'),
-    (c, 'pos_tratamento', 'Revisão após o tratamento',
-     'Olá, {primeiro_nome}! Tudo bem? Já faz um tempinho desde o seu tratamento no Instituto CG. Que tal agendarmos uma revisão para cuidarmos do resultado?');
+  -- Mensagens prontas (editáveis em Mensagens). Tom: elegante, cordial, humano e sem pressão.
+  -- "situacao" liga o modelo a uma tarefa específica; "padrao" é o sugerido na categoria.
+  insert into public.modelos_mensagem (clinica_id, categoria, situacao, padrao, titulo, texto) values
+    -- Primeiro contato
+    (c, 'primeiro_contato', 'primeiro_contato', true, 'Boas-vindas',
+     'Olá, {{nome}}! Tudo bem? Aqui é do {{clinica}}. Recebemos o seu contato e fico muito feliz com o seu interesse em {{procedimento}}. Posso te contar como funciona a avaliação e encontrar um horário que seja confortável para você?'),
+    (c, 'primeiro_contato', 'follow_up', false, 'Convite para a avaliação',
+     'Olá, {{nome}}! Que bom falar com você. O primeiro passo para {{procedimento}} é uma avaliação feita com calma, para entendermos exatamente o que você deseja. Qual período costuma ser melhor para você: manhã ou tarde?'),
+    -- Passou pela primeira consulta (pensando)
+    (c, 'pos_consulta', 'acompanhar_decisao', true, 'Depois da consulta',
+     'Olá, {{nome}}! Tudo bem? Foi um prazer receber você na consulta. Sei que é uma decisão importante: se ficou alguma dúvida sobre {{procedimento}}, estou por aqui para ajudar — sem pressa.'),
+    (c, 'pos_consulta', null, false, 'Conseguiu avaliar com calma?',
+     'Olá, {{nome}}! Tudo bem? Estou passando para saber se conseguiu avaliar com calma as informações sobre {{procedimento}}. Se quiser, posso te ajudar com qualquer dúvida e verificar um novo horário para você.'),
+    (c, 'pos_consulta', 'follow_up_orcamento', false, 'Sobre o plano de tratamento',
+     'Olá, {{nome}}! Espero que esteja bem. Fico à disposição caso queira rever algum ponto do plano de tratamento ou conversar sobre as condições de pagamento. Podemos encontrar juntos o formato que fizer mais sentido para você.'),
+    -- Paciente não fechou
+    (c, 'nao_fechou', 'retorno_por_motivo', true, 'Retomar com leveza',
+     'Olá, {{nome}}! Tudo bem? Lembrei de você e quis saber como está. Se ainda tiver vontade de realizar {{procedimento}}, será um prazer conversar sobre as possibilidades — sem compromisso.'),
+    (c, 'nao_fechou', null, false, 'Novas possibilidades',
+     'Olá, {{nome}}! Como vai? Queria te contar que temos algumas possibilidades de condições para {{procedimento}} que talvez façam sentido para você neste momento. Se quiser, te explico tudo com calma.'),
+    -- Paciente sem resposta
+    (c, 'sem_resposta', 'reabrir_sem_resposta', true, 'Retomar o contato',
+     'Olá, {{nome}}! Tudo bem? Imagino que a rotina esteja corrida. Deixo esta mensagem só para dizer que seguimos à disposição sobre {{procedimento}}. Quando for um bom momento, é só me responder por aqui.'),
+    (c, 'sem_resposta', null, false, 'Porta aberta',
+     'Olá, {{nome}}! Não quero incomodar — esta é só uma mensagem para deixar a porta aberta. Quando quiser retomar a conversa sobre {{procedimento}}, será um prazer atender você.'),
+    -- Paciente desmarcou
+    (c, 'desmarcou', 'recuperar_desmarcacao', true, 'Desmarcou',
+     'Olá, {{nome}}! Tudo bem? Vi que você precisou desmarcar {{consulta}} do dia {{data}}. Sem problema! Quando for melhor para você, encontramos um novo horário — é só me dizer os dias e horários que ficam mais fáceis.'),
+    (c, 'desmarcou', 'recuperar_falta', false, 'Faltou à consulta',
+     'Olá, {{nome}}! Sentimos sua falta na consulta do dia {{data}}. Está tudo bem? Se quiser, reservo um novo horário para você — é só me dizer o melhor dia.'),
+    -- Confirmação
+    (c, 'confirmacao', 'confirmar_agendamento', true, 'Confirmar presença',
+     'Olá, {{nome}}! Tudo bem? Passando para confirmar {{consulta}} com {{dentista}} no dia {{data}}, às {{horario}}. Podemos contar com a sua presença? Se precisar ajustar o horário, é só me avisar.'),
+    -- Remarcação
+    (c, 'remarcacao', null, true, 'Novo horário',
+     'Olá, {{nome}}! Tudo bem? Vamos encontrar um novo horário para {{consulta}}? Me diga os dias e períodos que ficam melhores para você, que eu verifico a agenda com carinho.'),
+    (c, 'remarcacao', 'clinica_cancelou', false, 'A clínica precisou remarcar',
+     'Olá, {{nome}}! Tudo bem? Precisamos reagendar {{consulta}} do dia {{data}} — pedimos desculpas pelo transtorno. Qual dia e horário ficam melhores para você?'),
+    -- Reativação
+    (c, 'reativacao', 'reativacao', true, 'Que saudade',
+     'Olá, {{nome}}! Tudo bem? Faz um tempinho que não nos vemos aqui no {{clinica}} e lembrei de você. Que tal agendarmos uma avaliação para cuidarmos do seu sorriso? Será um prazer receber você novamente.'),
+    -- Acompanhamento pós-atendimento
+    (c, 'pos_atendimento', null, true, 'Como você está?',
+     'Olá, {{nome}}! Tudo bem? Passando para saber como você está depois do atendimento. Se sentir qualquer coisa diferente ou tiver alguma dúvida, pode me chamar por aqui — estamos à disposição.'),
+    (c, 'pos_atendimento', 'agendar_tratamento', false, 'Início do tratamento',
+     'Olá, {{nome}}! Que alegria ter você conosco nesta nova etapa. Vamos combinar a data de início do seu tratamento? Me diga os dias e horários que ficam melhores para você.'),
+    (c, 'pos_atendimento', 'pos_tratamento', false, 'Revisão após o tratamento',
+     'Olá, {{nome}}! Tudo bem? Já faz um tempinho desde o seu tratamento aqui no {{clinica}}. Que tal agendarmos uma revisão para cuidarmos do resultado? Será um prazer rever você.'),
+    -- Pagamentos (o painel escolhe conforme o vencimento)
+    (c, 'pagamento_previsto', 'confirmar_pagamento', true, 'Lembrete antes do vencimento',
+     'Olá, {{nome}}! Tudo bem? Passando só para lembrar, com antecedência, do pagamento de {{valor}} previsto para {{vencimento}}. Qualquer dúvida, estou por aqui.'),
+    (c, 'cobranca_amigavel', null, true, 'Lembrete gentil',
+     'Olá, {{nome}}! Tudo bem? Passando com carinho para lembrar do pagamento de {{valor}}, com vencimento em {{vencimento}}, que ainda consta em aberto por aqui. Se já tiver feito, por favor desconsidere — e, se precisar, envio os dados novamente.'),
+    (c, 'pagamento_pendente', null, true, 'Pagamento em aberto',
+     'Olá, {{nome}}! Tudo bem? O pagamento de {{valor}}, previsto para {{vencimento}}, segue em aberto aqui. Pode ter sido apenas um descompasso de datas — se preferir, podemos combinar juntos a melhor forma de acertar. Fico à disposição.'),
+    -- Paciente antigo
+    (c, 'paciente_antigo', 'manutencao', true, 'Hora da manutenção',
+     'Olá, {{nome}}! Tudo bem? Está chegando a hora da sua manutenção de {{procedimento}}. Vamos reservar um horário para manter o resultado sempre bonito?'),
+    (c, 'paciente_antigo', null, false, 'Quanto tempo!',
+     'Olá, {{nome}}! Quanto tempo! Aqui é do {{clinica}}. Atualizamos o seu cadastro e quis saber como você está. Quando quiser, será um prazer receber você para uma revisão.');
 
   -- Regras de follow-up (tudo editável em Configurações).
   --   prazo_dias: 1ª ação N dias após o evento · intervalos: novas tentativas (dias após a anterior)
