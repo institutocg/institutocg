@@ -251,6 +251,35 @@ begin
   update public.agendamentos set valor_centavos = 350000
    where clinica_id = c and pessoa_id = (select id from public.pessoas where clinica_id = c and nome = 'Ana Costa');
 
+  -- Prontuário da Maria: consulta 01 (avaliação, finalizada) com odontograma e plano de tratamento.
+  insert into public.atendimentos (clinica_id, prontuario_id, pessoa_id, profissional_id, data, horario, tipo, procedimento_id,
+                                   motivo, anamnese, anamnese_obs, diagnostico, evolucao, orientacoes, retorno_em, odontograma,
+                                   status, finalizado_em)
+  select c, pr.id, pr.pessoa_id, prof, hoje - 14, time '10:00', 'avaliacao',
+         (select id from public.procedimentos where clinica_id = c and nome = 'Facetas de porcelana'),
+         array['Avaliação', 'Estética'], array['Hipertensão'], 'Losartana 50 mg.', array['Manchas / escurecimento', 'Desgaste dental'],
+         'Avaliação estética completa. Limpeza realizada. Planejado clareamento e facetas.',
+         array['Higiene oral reforçada', 'Evitar alimentos com corante'], hoje + 7,
+         '{"11": {"c": "faceta", "f": [], "s": "a_tratar"}, "21": {"c": "faceta", "f": [], "s": "a_tratar"},
+           "16": {"c": "restauracao", "f": ["O"], "s": "existente"}, "26": {"c": "carie", "f": ["O", "M"], "s": "a_tratar"},
+           "36": {"c": "canal", "f": [], "s": "existente"}}'::jsonb,
+         'finalizado', now() - interval '14 days'
+    from public.prontuarios pr join public.pessoas pe on pe.id = pr.pessoa_id
+   where pe.clinica_id = c and pe.nome = 'Maria Silva'
+  returning id, pessoa_id into v, p;
+  insert into public.orcamentos (clinica_id, pessoa_id, origem, status, apresentado_em, apresentado_por)
+  values (c, p, 'prontuario', 'apresentado', hoje - 14, prof)
+  returning id into orc;
+  insert into public.orcamento_itens (clinica_id, orcamento_id, procedimento_id, valor_unitario_centavos, dente, atendimento_id,
+                                      status, realizado_atendimento_id, realizado_em)
+  values
+    (c, orc, (select id from public.procedimentos where clinica_id = c and nome = 'Manutenção e limpeza'), 35000, null, v,
+     'realizado', v, hoje - 14),
+    (c, orc, (select id from public.procedimentos where clinica_id = c and nome = 'Clareamento dental'), 120000, null, v,
+     'aceito', null, null),
+    (c, orc, (select id from public.procedimentos where clinica_id = c and nome = 'Facetas de porcelana'), 1400000, '13 a 23', v,
+     'orcado', null, null);
+
   -- 14 e 15. Pacientes antigos sem atendimento há meses (público de campanhas de reativação)
   insert into public.pessoas (clinica_id, tipo_cadastro, nome, whatsapp_e164, origem_id, ultimo_atendimento_informado,
                               consentimento_marketing)

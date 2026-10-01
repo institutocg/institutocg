@@ -1066,6 +1066,20 @@ Tela **Indicadores**, para entender o comportamento dos leads. É gestão da cl�
 - **Perdas**: preço, desistiu, não respondeu, escolheu outro local, adiou e outro (cada motivo de perda tem um `grupo_perda`), mais a lista dos motivos registrados.
 - **Reativação**: pacientes elegíveis (inativos, contatáveis, sem negociação aberta), pacientes reativados no período e o resultado (responderam, agendaram, fecharam, aguardando, sem retorno).
 
+## 14.10 Prontuário (implementado)
+
+Módulo clínico integrado ao CRM — mesma identidade visual, organização inspirada em sistemas como o Simples Dental (rápido de preencher durante a consulta). Nada foi duplicado: paciente, agenda, procedimentos, orçamento, financeiro e permissões são os mesmos.
+
+- **Um prontuário por paciente**, criado automaticamente e ligado ao **id** do paciente (`prontuarios.pessoa_id`). Acesso pelo cadastro (botão *Prontuário*), pela agenda (*Abrir prontuário* na consulta) e pela aba *Prontuário* (busca, consultas de hoje, últimos atendimentos).
+- **Consultas ilimitadas** dentro do prontuário (`atendimentos`), numeradas (Consulta 01, 02…), sem apagar nem substituir as anteriores. Linha do tempo com o que foi feito em cada uma. Ao finalizar, a consulta fica travada (nada é apagado; tudo auditado).
+- **Ficha por seleção**: motivo, anamnese, diagnóstico e orientações em "pílulas"; evolução/conduta e observações em campos curtos; retorno com atalhos (7, 15, 30 dias, 3 e 6 meses) e *Agendar retorno*.
+- **Odontograma** (FDI, 32 dentes, 5 faces): condição, faces, situação (a tratar / existente) e observação por dente. **Cada consulta guarda o seu odontograma**; a próxima começa do anterior e mostra o que mudou. Na visão geral dá para ver o odontograma de cada consulta (evolução).
+- **Plano de tratamento / orçamento** = orçamento existente com `origem = 'prontuario'` (sem mexer no funil comercial nem criar follow-up). Itens com status **orçado, aceito, pendente, realizado, não realizado, cancelado**, valor e dente. *Realizar nesta consulta* marca o item na consulta e registra o pagamento.
+- **Financeiro integrado**: ao realizar — **pago**, **pagamento parcial** (parte hoje + saldo na data prevista), **não pago** (data prevista e parcelas), **já está no Financeiro** (liga a um pagamento existente) ou sem cobrança. Usa as mesmas vendas/parcelas/pagamentos: o que é registrado no prontuário aparece no Financeiro e vice-versa (ex.: quitar no Financeiro → o item mostra *pago*). Lembretes de vencimento e atraso no painel, como sempre.
+- **Agenda → prontuário**: no dia, *Abrir prontuário* cria (ou reabre) a consulta com paciente, data, horário, dentista e procedimento/motivo do agendamento.
+- **Visão geral**: paciente (idade, alertas de saúde da última anamnese), última e próxima consulta, histórico, plano, realizados, pendentes, situação financeira (com *Marcar como pago*) e odontograma.
+- **Acesso (LGPD — dado de saúde)**: administradora e dentistas; outras pessoas só com `membros.pode_ver_prontuario`. A secretária continua vendo agenda e financeiro, mas não a ficha clínica.
+
 ## 15. Decisões pendentes
 
 **Decidido:**

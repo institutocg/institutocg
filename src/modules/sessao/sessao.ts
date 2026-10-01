@@ -13,6 +13,8 @@ export interface Sessao {
   clinicaNome: string;
   papel: "admin" | "gestor" | "comercial" | "dentista";
   podeVerFinanceiro: boolean;
+  /** Prontuário (dado de saúde): administradora, dentistas ou acesso liberado. */
+  podeVerProntuario: boolean;
 }
 
 export const COOKIE_DEV = "crm_dev_usuaria";
@@ -45,7 +47,8 @@ export const obterSessao = cache(async (): Promise<Sessao | "sem_acesso" | null>
   const linhas = await comoUsuaria(usuario.id, async (db) => {
     const r = await db.query<Sessao>(
       `select u.id as "usuarioId", u.nome, u.email, c.id as "clinicaId", c.nome as "clinicaNome",
-              m.papel, (m.papel in ('admin', 'gestor') or m.pode_ver_financeiro) as "podeVerFinanceiro"
+              m.papel, (m.papel in ('admin', 'gestor') or m.pode_ver_financeiro) as "podeVerFinanceiro",
+              (m.papel in ('admin', 'dentista') or m.pode_ver_prontuario) as "podeVerProntuario"
          from public.membros m
          join public.usuarios u on u.id = m.usuario_id
          join public.clinicas c on c.id = m.clinica_id

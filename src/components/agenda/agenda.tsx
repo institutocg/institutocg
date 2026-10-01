@@ -15,6 +15,7 @@ import {
 } from "@/app/(app)/agenda/acoes";
 import { avisar } from "@/components/avisos";
 import { Dialogo } from "@/components/dialogo";
+import { BotaoAbrirProntuario } from "@/components/prontuario/plano";
 import { formatarMoeda } from "@/lib/moeda";
 import { linkWhatsApp } from "@/lib/telefone";
 import {
@@ -425,6 +426,7 @@ export function CartaoConsulta({
   profissionais,
   formas,
   podeVerFinanceiro,
+  podeVerProntuario = false,
   mostrarDentista = false,
 }: {
   consulta: Consulta;
@@ -433,6 +435,7 @@ export function CartaoConsulta({
   profissionais: Opcao[];
   formas: Forma[];
   podeVerFinanceiro: boolean;
+  podeVerProntuario?: boolean;
   mostrarDentista?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
@@ -486,6 +489,7 @@ export function CartaoConsulta({
           profissionais={profissionais}
           formas={formas}
           podeVerFinanceiro={podeVerFinanceiro}
+          podeVerProntuario={podeVerProntuario}
           aoFechar={() => setAberto(false)}
         />
       )}
@@ -509,6 +513,7 @@ function JanelaConsulta({
   profissionais,
   formas,
   podeVerFinanceiro,
+  podeVerProntuario,
   aoFechar,
 }: {
   c: Consulta;
@@ -517,6 +522,7 @@ function JanelaConsulta({
   profissionais: Opcao[];
   formas: Forma[];
   podeVerFinanceiro: boolean;
+  podeVerProntuario: boolean;
   aoFechar: () => void;
 }) {
   const [acao, setAcao] = useState<AcaoConsulta | "pagamento" | null>(null);
@@ -624,6 +630,12 @@ function JanelaConsulta({
             <Link href={`/contatos/${c.pessoa_id}`} className="inline-flex items-center gap-1 text-dourado-escuro underline">
               <UserRound className="size-4" /> Abrir paciente
             </Link>
+            {podeVerProntuario && c.status !== "remarcado" && c.status !== "desmarcado" && c.status !== "cancelado_clinica" && (
+              <BotaoAbrirProntuario
+                agendamentoId={c.id}
+                classe="inline-flex items-center gap-1 text-dourado-escuro underline disabled:opacity-50"
+              />
+            )}
           </div>
           <Erro texto={erro} />
         </>

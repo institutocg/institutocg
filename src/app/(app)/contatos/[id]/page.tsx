@@ -3,6 +3,7 @@ import {
   CalendarClock,
   CircleCheck,
   CircleDot,
+  ClipboardList,
   ExternalLink,
   LifeBuoy,
   Pencil,
@@ -171,6 +172,14 @@ export default async function FichaPaciente({
             >
               <Phone className="size-4" /> Ligar
             </a>
+          )}
+          {sessao.podeVerProntuario && (
+            <Link
+              href={`/prontuario/${c.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte bg-superficie px-3.5 py-2 text-sm font-medium hover:border-dourado"
+            >
+              <ClipboardList className="size-4" /> Prontuário
+            </Link>
           )}
           <Link
             href={`/contatos/${c.id}/editar`}

@@ -33,7 +33,7 @@ export default async function LayoutInterno({ children }: LayoutProps<"/">) {
         <div className="hidden px-4 pb-5 lg:block">
           <BotaoNovoPaciente />
         </div>
-        <Menu aRecuperar={aRecuperar} />
+        <Menu aRecuperar={aRecuperar} prontuario={sessao.podeVerProntuario} />
         <div className="hidden border-t border-borda px-6 py-5 lg:block">
           <p className="text-sm font-medium">{sessao.nome}</p>
           <p className="text-xs text-sutil">{sessao.clinicaNome}</p>

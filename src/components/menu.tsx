@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ChartNoAxesColumn, Megaphone, MessageSquareText, Plus, Settings, SquareKanban, Sun, Users, Wallet } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, ClipboardList, Megaphone, MessageSquareText, Plus, Settings, SquareKanban, Sun, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -11,6 +11,7 @@ const MENU = [
   { rotulo: "Campanhas", href: "/campanhas", icone: Megaphone, pronto: true },
   { rotulo: "Mensagens", href: "/mensagens", icone: MessageSquareText, pronto: true },
   { rotulo: "Agenda", href: "/agenda", icone: CalendarDays, pronto: true },
+  { rotulo: "Prontuário", href: "/prontuario", icone: ClipboardList, pronto: true },
   { rotulo: "Financeiro", href: "/financeiro", icone: Wallet, pronto: true },
   { rotulo: "Indicadores", href: "/indicadores", icone: ChartNoAxesColumn, pronto: true },
   { rotulo: "Configurações", href: "/configuracoes", icone: Settings, pronto: true },
@@ -30,11 +31,11 @@ export function BotaoNovoPaciente({ compacto = false }: { compacto?: boolean }) 
 }
 
 /** aRecuperar: desmarcações/faltas esperando recuperação (aparece ao lado de "Agenda"). */
-export function Menu({ aRecuperar = 0 }: { aRecuperar?: number }) {
+export function Menu({ aRecuperar = 0, prontuario = false }: { aRecuperar?: number; prontuario?: boolean }) {
   const caminho = usePathname();
   return (
     <nav aria-label="Menu principal" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-1 lg:flex-col">
-      {MENU.map(({ rotulo, href, icone: Icone, pronto }) => {
+      {MENU.filter((m) => prontuario || m.href !== "/prontuario").map(({ rotulo, href, icone: Icone, pronto }) => {
         if (!pronto) {
           return (
             <span

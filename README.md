@@ -1,6 +1,6 @@
 # Instituto CG — CRM comercial
 
-CRM interno de relacionamento e organização comercial da clínica (não é prontuário).
+CRM interno de relacionamento e organização comercial da clínica, com prontuário odontológico integrado (acesso restrito a quem atende).
 
 - Especificação: [`docs/ARQUITETURA_CRM.md`](docs/ARQUITETURA_CRM.md)
 - Banco de dados e motor de ações: [`supabase/README.md`](supabase/README.md)
