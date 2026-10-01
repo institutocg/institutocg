@@ -18,7 +18,14 @@ const global = globalThis as unknown as { crmPool?: Pool };
 function criarPool() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL não configurada (veja .env.example).");
-  const novo = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 10_000 });
+  // Fora do computador (Supabase), a conexão é sempre criptografada.
+  const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+  const novo = new Pool({
+    connectionString: url,
+    max: 5,
+    idleTimeoutMillis: 10_000,
+    ssl: local || /sslmode=/.test(url) ? undefined : { rejectUnauthorized: false },
+  });
   // Conexão ociosa derrubada (reinício do banco, rede): registra e segue; o pool abre outra.
   novo.on("error", (erro) => console.error("Conexão com o banco encerrada", erro.message));
   return novo;

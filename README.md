@@ -6,6 +6,10 @@ CRM interno de relacionamento e organização comercial da clínica (não é pro
 - Banco de dados e motor de ações: [`supabase/README.md`](supabase/README.md)
 - Telas: [`docs/telas/`](docs/telas)
 
+## Versão de teste (na internet, com dados fictícios)
+
+Passo a passo em [`docs/VERSAO_DE_TESTE.md`](docs/VERSAO_DE_TESTE.md): um projeto Supabase só para testes + Vercel. O banco inteiro (estrutura, dados fictícios e logins) é instalado colando [`supabase/versao-teste/instalar.sql`](supabase/versao-teste/instalar.sql) no SQL Editor. Depois de mudar migrações ou `seed.sql`, regere com `./scripts/gerar-versao-teste.sh` (o `npm run test:db` confere).
+
 ## Rodar no computador (sem Supabase)
 
 ```bash

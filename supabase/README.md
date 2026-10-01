@@ -123,6 +123,12 @@ npm run test:db    # sobe um PostgreSQL temporário, aplica as migrações, o se
 
 Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, `18_regras_e_campanhas.sql`, `19_agenda.sql`, `21_mensagens.sql` e `22_financeiro.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
 
+## Versão de teste
+
+`seed.sql` cria o esquema `teste` — é a presença dele que liga o modo de teste (`public.ambiente_teste()`): faixa "Versão de teste" e o botão *Recomeçar com dados de exemplo* (`teste.recomecar()`, só a administradora: apaga tudo menos os logins e roda `teste.carregar_dados_ficticios()` de novo). `teste.criar_logins_de_teste()` cria (ou troca a senha de) `dona@teste.institutocg.com.br` e `secretaria@teste.institutocg.com.br`, já confirmados.
+
+`versao-teste/instalar.sql` = todas as migrações + `seed.sql` + logins, num só arquivo para o SQL Editor (gerado por `scripts/gerar-versao-teste.sh`). O `testar-banco.sh` confere que ele está em dia e o instala num banco com as tabelas de login iguais às do Supabase. Passo a passo: [`docs/VERSAO_DE_TESTE.md`](../docs/VERSAO_DE_TESTE.md).
+
 ## Implantação no Supabase (quando formos para produção)
 
 1. Criar o projeto na região **São Paulo** e aplicar as migrações (`supabase db push`).
@@ -133,5 +139,5 @@ Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, 
    select adicionar_membro('<id da clínica>', 'email-da-dona@...', 'admin');
    select adicionar_membro('<id da clínica>', 'email-da-secretaria@...', 'comercial', true);
    ```
-5. **Não** executar `seed.sql` em produção (são dados fictícios).
+5. **Não** executar `seed.sql` nem `versao-teste/instalar.sql` em produção (são dados fictícios e ligam o modo de teste).
 6. (Opcional) Agendar a rotina diária com pg_cron: `select cron.schedule('rotina-diaria', '0 8 * * *', $$select public.preparar_dia(id) from public.clinicas$$);` — mesmo sem isso, ela roda ao abrir o painel.

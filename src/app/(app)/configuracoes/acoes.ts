@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { comoUsuaria, mensagemDeErro } from "@/lib/db";
 import { esquemaRegra, lerIntervalos, type DadosRegra } from "@/modules/regras/regras";
+import { ambienteTeste } from "@/modules/sessao/ambiente";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import type { Retorno } from "../hoje/acoes";
 
@@ -124,6 +125,20 @@ export async function salvarDentista(dados: z.input<typeof esquemaDentista>): Pr
     });
     revalidatePath("/", "layout");
     return { ok: true, mensagem: v.id ? "Dentista atualizada." : "Dentista incluída. Ela já aparece na agenda." };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+/** Versão de teste: apaga o que foi feito nos testes e recria os dados de exemplo (somente a administradora). */
+export async function recomecarVersaoTeste(): Promise<Retorno> {
+  const sessao = await exigirSessao();
+  if (sessao.papel !== "admin") return { ok: false, erro: "Somente a administradora recomeça a versão de teste." };
+  if (!(await ambienteTeste())) return { ok: false, erro: "Disponível somente na versão de teste." };
+  try {
+    await comoUsuaria(sessao.usuarioId, (db) => db.query("select teste.recomecar()"));
+    revalidatePath("/", "layout");
+    return { ok: true, mensagem: "Pronto: os dados de exemplo foram recriados, com datas a partir de hoje." };
   } catch (erro) {
     return { ok: false, erro: mensagemDeErro(erro) };
   }

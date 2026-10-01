@@ -146,6 +146,16 @@ as $$
   );
 $$;
 
+-- Versão de teste: o esquema "teste" só existe onde os dados fictícios foram
+-- carregados (seed.sql / versao-teste/instalar.sql) — nunca em produção.
+create or replace function public.ambiente_teste()
+returns boolean
+language sql
+stable
+as $$
+  select to_regnamespace('teste') is not null;
+$$;
+
 create or replace function public.pode_ver_financeiro(p_clinica uuid)
 returns boolean
 language sql

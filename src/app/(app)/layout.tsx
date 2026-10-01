@@ -3,15 +3,20 @@ import { Avisos } from "@/components/avisos";
 import { Marca } from "@/components/marca";
 import { BotaoNovoPaciente, Menu } from "@/components/menu";
 import { comoUsuaria } from "@/lib/db";
+import { FaixaVersaoTeste } from "@/components/versao-teste";
 import { contarARecuperar } from "@/modules/agenda/servidor";
+import { ambienteTeste } from "@/modules/sessao/ambiente";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import { sair } from "../(auth)/login/acoes";
 
 export default async function LayoutInterno({ children }: LayoutProps<"/">) {
   const sessao = await exigirSessao();
   const aRecuperar = await comoUsuaria(sessao.usuarioId, (db) => contarARecuperar(db, sessao.clinicaId));
+  const teste = await ambienteTeste();
 
   return (
+    <>
+    {teste && <FaixaVersaoTeste admin={sessao.papel === "admin"} />}
     <div className="min-h-screen lg:flex">
       <aside className="border-b border-borda bg-superficie lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0">
         <div className="flex items-center justify-between gap-3 px-5 py-4 lg:block lg:px-6 lg:py-7">
@@ -42,5 +47,6 @@ export default async function LayoutInterno({ children }: LayoutProps<"/">) {
       <main className="min-w-0 flex-1">{children}</main>
       <Avisos />
     </div>
+    </>
   );
 }

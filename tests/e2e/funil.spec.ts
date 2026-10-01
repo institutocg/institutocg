@@ -18,6 +18,14 @@ const janela = (page: Page) => page.getByRole("dialog");
 function daquiA(dias: number) {
   return new Date(Date.now() + dias * 86_400_000).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 }
+/** Primeiro dia útil a partir de daqui a N dias (sem fim de semana nem feriado nacional fixo). */
+const FERIADOS_FIXOS = ["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "11-20", "12-25"];
+function diaUtil(dias: number) {
+  let n = dias;
+  const fechado = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay()) || FERIADOS_FIXOS.includes(d.slice(5));
+  while (fechado(daquiA(n))) n++;
+  return daquiA(n);
+}
 
 async function mover(page: Page, nome: string, etapa: string) {
   await page.getByRole("button", { name: `Mover ${nome}` }).click();
@@ -145,7 +153,7 @@ test("avaliação agendada com data: confirmação automática", async ({ page }
   await entrar(page);
   await page.goto("/funil");
   await mover(page, "Fernanda Lopes", "Avaliação agendada");
-  await janela(page).getByLabel("Data e horário da avaliação").fill(`${daquiA(9)}T09:30`);
+  await janela(page).getByLabel("Data e horário da avaliação").fill(`${diaUtil(9)}T09:30`);
   await expect(janela(page).getByText("A confirmação fica marcada para a véspera (dia útil).")).toBeVisible();
   await janela(page).getByRole("button", { name: "Mover" }).click();
   await expect(janela(page).getByRole("alert")).toHaveText("Escolha a dentista.");

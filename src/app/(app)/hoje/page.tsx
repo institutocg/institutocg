@@ -35,7 +35,9 @@ const GRUPOS: { grupo: Grupo; titulo: string; ponto: string; vazio: string; desc
 export default async function PaginaHoje() {
   const sessao = await exigirSessao();
   const { painel, motivos } = await carregarPainel(sessao);
-  const nome = sessao.nome.split(" ")[0];
+  // "Júlia Andrade" → "Júlia"; "Dra. Cristina" → "Dra. Cristina" (o título vem com o nome).
+  const partes = sessao.nome.split(" ");
+  const nome = /^(dra?|sra?)\.?$/i.test(partes[0]) && partes[1] ? `${partes[0]} ${partes[1]}` : partes[0];
   const nadaHoje = painel.resumo.totalHoje === 0;
 
   return (

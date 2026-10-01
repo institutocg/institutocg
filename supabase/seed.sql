@@ -1,13 +1,26 @@
 -- =============================================================================
--- Dados FICTÍCIOS para desenvolvimento e demonstração.
+-- Dados FICTÍCIOS para desenvolvimento, demonstração e a VERSÃO DE TESTE.
 -- Nunca executar em produção. Nomes e telefones inventados.
+--
+-- Cria o esquema "teste": a existência dele é o que liga o modo de teste no
+-- sistema (faixa "Versão de teste", botão "Recomeçar com dados de exemplo").
 --
 -- As situações são criadas como na vida real (novo contato, orçamento,
 -- desmarcação, venda…) e o MOTOR cria as tarefas sozinho. No fim, algumas datas
 -- são deslocadas para o passado para simular atrasos.
 -- =============================================================================
 
-do $$
+create schema if not exists teste;
+revoke all on schema teste from public;
+grant usage on schema teste to authenticated;
+
+-- Cria a clínica "Instituto CG" com as situações de exemplo e devolve o id.
+create or replace function teste.carregar_dados_ficticios()
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   c        uuid := public.inicializar_clinica('Instituto CG');
   hoje     date := public.hoje_clinica(c);
@@ -236,9 +249,134 @@ begin
   insert into public.pessoas (clinica_id, tipo_cadastro, nome, whatsapp_e164, origem_id, ultimo_atendimento_informado)
   values (c, 'paciente_antigo', 'Heitor Campos', '+5511900000015',
           (select id from public.origens where clinica_id = c and nome = 'Paciente antigo'), hoje - 280);
+
+  -- A rotina de hoje já "rodou" para estes dados.
+  insert into public.execucoes_rotina (clinica_id, dia) values (c, hoje);
+  return c;
 end;
 $$;
+revoke execute on function teste.carregar_dados_ficticios() from public, anon, authenticated;
 
--- A rotina de hoje já "rodou" para estes dados.
-insert into public.execucoes_rotina (clinica_id, dia)
-select id, public.hoje_clinica(id) from public.clinicas where nome = 'Instituto CG';
+-- Login de teste. No Supabase de verdade, cria o login já confirmado e com senha
+-- (nenhum e-mail é enviado); se já existir, troca a senha.
+create or replace function teste.criar_login(p_email text, p_nome text, p_senha text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_col text;
+begin
+  select id into v_id from auth.users where lower(email) = lower(p_email);
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'auth' and table_name = 'users' and column_name = 'encrypted_password') then
+    -- Banco local (sem Supabase Auth): o login é só o e-mail.
+    if v_id is null then
+      insert into auth.users (email, raw_user_meta_data) values (p_email, jsonb_build_object('nome', p_nome));
+    end if;
+    return;
+  end if;
+
+  if v_id is not null then
+    execute 'update auth.users set encrypted_password = extensions.crypt($2, extensions.gen_salt(''bf'')),
+                                   email_confirmed_at = coalesce(email_confirmed_at, now()), updated_at = now()
+              where id = $1' using v_id, p_senha;
+    return;
+  end if;
+
+  v_id := gen_random_uuid();
+  execute 'insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+                                   raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+           values (''00000000-0000-0000-0000-000000000000'', $1, ''authenticated'', ''authenticated'', $2,
+                   extensions.crypt($3, extensions.gen_salt(''bf'')), now(),
+                   ''{"provider": "email", "providers": ["email"]}'', jsonb_build_object(''nome'', $4), now(), now())'
+    using v_id, p_email, p_senha, p_nome;
+  -- O Supabase Auth não aceita estes campos nulos.
+  for v_col in select column_name from information_schema.columns
+                where table_schema = 'auth' and table_name = 'users'
+                  and column_name in ('confirmation_token', 'recovery_token', 'email_change_token_new',
+                                      'email_change_token_current', 'email_change', 'phone_change',
+                                      'phone_change_token', 'reauthentication_token') loop
+    execute format('update auth.users set %I = coalesce(%I, '''') where id = $1', v_col, v_col) using v_id;
+  end loop;
+  execute 'insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+           values (gen_random_uuid(), $1, $1::text,
+                   jsonb_build_object(''sub'', $1::text, ''email'', $2, ''email_verified'', true), ''email'', now(), now(), now())'
+    using v_id, p_email;
+end;
+$$;
+revoke execute on function teste.criar_login(text, text, text) from public, anon, authenticated;
+
+-- Logins da versão de teste (dona e secretária), com senhas novas a cada chamada.
+-- Para trocar as senhas: select * from teste.criar_logins_de_teste();
+create or replace function teste.criar_logins_de_teste()
+returns table (perfil text, email text, senha text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_clinica uuid := (select id from public.clinicas where nome = 'Instituto CG' order by criado_em desc limit 1);
+  v_senha text;
+begin
+  if v_clinica is null then v_clinica := teste.carregar_dados_ficticios(); end if;
+  for perfil, email, v_senha in
+    select x.perfil, x.email, 'cg-' || substr(md5(random()::text), 1, 4) || '-' || substr(md5(random()::text), 1, 4)
+      from (values ('Dona da clínica (administradora)', 'dona@teste.institutocg.com.br', 1),
+                   ('Secretária', 'secretaria@teste.institutocg.com.br', 2)) as x (perfil, email, ordem)
+     order by x.ordem
+  loop
+    perform teste.criar_login(email, case when email like 'dona@%' then 'Dra. Cristina (teste)' else 'Secretária (teste)' end, v_senha);
+    perform public.adicionar_membro(v_clinica, email, case when email like 'dona@%' then 'admin' else 'comercial' end::public.papel_membro, true);
+    senha := v_senha;
+    return next;
+  end loop;
+end;
+$$;
+revoke execute on function teste.criar_logins_de_teste() from public, anon, authenticated;
+
+-- "Recomeçar com dados de exemplo" (só a administradora, só na versão de teste):
+-- apaga tudo o que foi feito nos testes e recria as situações de exemplo, com
+-- datas a partir de hoje. Os logins continuam os mesmos.
+create or replace function teste.recomecar()
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_clinica uuid := (select m.clinica_id from public.membros m where m.usuario_id = auth.uid() and m.ativo
+                      order by m.criado_em limit 1);
+  v_membros jsonb;
+  v_tabelas text;
+  v_nova uuid;
+  v_m jsonb;
+begin
+  if v_clinica is null or not public.eh_admin(v_clinica) then
+    raise exception 'Só a administradora pode recomeçar a versão de teste.' using errcode = '42501';
+  end if;
+  select jsonb_agg(jsonb_build_object('email', u.email, 'papel', m.papel, 'fin', m.pode_ver_financeiro))
+    into v_membros
+    from public.membros m join public.usuarios u on u.id = m.usuario_id
+   where m.clinica_id = v_clinica and m.ativo;
+
+  select string_agg(format('public.%I', tablename), ', ') into v_tabelas
+    from pg_tables where schemaname = 'public' and tablename <> 'usuarios';
+  execute 'truncate table ' || v_tabelas || ' restart identity cascade';
+
+  -- Os dados de exemplo são criados "pelo sistema", não em nome de quem clicou.
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  v_nova := teste.carregar_dados_ficticios();
+  for v_m in select * from jsonb_array_elements(v_membros) loop
+    perform public.adicionar_membro(v_nova, v_m ->> 'email', (v_m ->> 'papel')::public.papel_membro, (v_m ->> 'fin')::boolean);
+  end loop;
+  return v_nova;
+end;
+$$;
+revoke execute on function teste.recomecar() from public, anon;
+grant execute on function teste.recomecar() to authenticated;
+
+select teste.carregar_dados_ficticios();

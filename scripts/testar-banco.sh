@@ -45,4 +45,24 @@ for arquivo in "$RAIZ"/supabase/tests/[1-9]*.sql; do
   "${PSQL[@]}" -f "$arquivo" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  /  /'
 done
 
+echo "→ Versão de teste (supabase/versao-teste/instalar.sql)"
+"$RAIZ/scripts/gerar-versao-teste.sh" --conferir
+"${PSQL[@]}" -c "create database instalacao" >/dev/null
+INST=(psql -h "$DADOS" -p "$PORTA" -U postgres -d instalacao -v ON_ERROR_STOP=1 -q -X)
+"${INST[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase_real.sql"
+LOGINS="$("${INST[@]}" -At -F '|' -f "$RAIZ/supabase/versao-teste/instalar.sql" | grep '@teste.institutocg.com.br')"
+[ "$(echo "$LOGINS" | wc -l)" = "2" ] || { echo "FALHOU: instalar.sql não mostrou os 2 logins" >&2; exit 1; }
+while IFS='|' read -r _perfil email senha; do
+  ok="$("${INST[@]}" -At -c "select count(*) from auth.users u join auth.identities i on i.user_id = u.id and i.provider = 'email'
+    join public.membros m on m.usuario_id = u.id
+    where u.email = '$email' and u.encrypted_password = extensions.crypt('$senha', u.encrypted_password)
+      and u.email_confirmed_at is not null and u.confirmation_token = '' and u.recovery_token = ''
+      and u.email_change_token_new = '' and u.email_change = '' and u.aud = 'authenticated'")"
+  [ "$ok" = "1" ] || { echo "FALHOU: login de teste $email" >&2; exit 1; }
+  echo "  ok - login de teste $email (senha confere, e-mail confirmado, acesso à clínica)"
+done <<< "$LOGINS"
+[ "$("${INST[@]}" -At -c "select public.ambiente_teste() and (select count(*) from public.pessoas) > 10")" = "t" ] \
+  || { echo "FALHOU: dados fictícios / modo de teste" >&2; exit 1; }
+echo "  ok - estrutura, dados fictícios e modo de teste instalados num único arquivo"
+
 echo "✓ Banco de dados verificado."

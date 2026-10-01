@@ -14,6 +14,8 @@ import {
 } from "@/modules/regras/regras";
 import { carregarRegras } from "@/modules/regras/servidor";
 import { Dentistas, type Dentista } from "@/components/configuracoes/dentistas";
+import { RecomecarVersaoTeste } from "@/components/versao-teste";
+import { ambienteTeste } from "@/modules/sessao/ambiente";
 import { exigirSessao } from "@/modules/sessao/sessao";
 
 export const metadata = { title: "Configurações · Instituto CG" };
@@ -32,6 +34,7 @@ export default async function Configuracoes() {
     );
     return { ...r, dentistas: d.rows };
   });
+  const teste = await ambienteTeste();
   const porSituacao = new Map(regras.map((r) => [r.situacao, r]));
 
   return (
@@ -116,6 +119,24 @@ export default async function Configuracoes() {
           />
         </div>
       </section>
+
+      {teste && (
+        <section aria-labelledby="versao-teste-titulo" id="versao-teste" className="mt-10 scroll-mt-6">
+          <h2 id="versao-teste-titulo" className="font-titulo text-2xl">
+            Versão de teste
+          </h2>
+          <p className="text-sm text-sutil">
+            Os pacientes são fictícios. Teste à vontade: quando quiser, volte ao ponto de partida.
+          </p>
+          <div className="mt-4 rounded-xl border border-importante/30 bg-superficie p-4 sm:p-5">
+            {admin ? (
+              <RecomecarVersaoTeste />
+            ) : (
+              <p className="text-sm text-suave">Somente a administradora pode recomeçar os dados de exemplo.</p>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
