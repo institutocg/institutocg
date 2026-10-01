@@ -17,6 +17,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20261001120000_agenda.sql` | **Agenda comercial**: `agendar()` (paciente existente ou novo, procedimento, data, horário, dentista, status; horário de atendimento e conflito por dentista), `desmarcar_consulta()`, `remarcar_consulta()`, `mudar_status_consulta()`, `buscar_pacientes()`, garantia de recuperação e visões `v_agenda` e `v_recuperacao` |
 | `20261002120000_mensagens.sql` | **Mensagens prontas**: variáveis de cada tarefa/paciente (`variaveis_tarefa`, `variaveis_pessoa`), situação da mensagem (pagamentos mudam com o atraso), `sugestoes_mensagem(tarefa)` e `mensagens_para_pessoa(pessoa)`; um modelo padrão por situação e procedimento |
 | `20261003120000_financeiro_simples.sql` | **Financeiro simples**: `registrar_negociacao()` (paciente, procedimento, valor, entrada com data e forma próprias, parcelas, forma, observações), `registrar_pagamento()` (total ou parcial), `mudar_vencimento()`, `quitar_recebidos_na_hora()` (cartão), visões `v_financeiro_parcelas` / `v_financeiro_negociacoes` e `resumo_financeiro(mês)` |
+| `20261004120000_indicadores.sql` | **Indicadores comerciais e de marketing**: `indicadores(clínica, de, até, procedimento)` → leads, conversão, funil, origem (por `origens.canal`), procedimentos, perdas (por `motivos.grupo_perda`) e reativação, sempre por período |
 
 ## Motor de ações — regras de follow-up configuráveis
 
@@ -79,6 +80,14 @@ Sem contabilidade: para cada negociação, **paciente, procedimento, valor, form
 - Formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro, e transferência. **Cartão é recebido na hora** (`recebe_na_hora`): entra como pago, sem lembretes de cobrança.
 - Pagamento com data futura → lembrete automático no painel na data ("Pagamento previsto — Maria Silva — R$ 2.000,00"); passou da data → "Pagamento atrasado — vencido há N dias", urgente. Pagou → o lembrete sai; pagou uma parte → o lembrete mostra o saldo; nova data combinada → o lembrete acompanha.
 - Resumo do mês: total recebido (e nº de pagamentos), previsto no mês, pendente, atrasado e vendido — com filtro opcional por procedimento (`resumo_financeiro(clínica, mês, procedimento)`); quadro `financeiro_por_procedimento(clínica, mês)`.
+
+## Indicadores
+
+`indicadores(clínica, de, até, procedimento)` devolve um JSON com tudo o que a tela Indicadores mostra. Roda com as permissões de quem consulta (RLS): cada clínica só vê os próprios números. Não há nada por pessoa da equipe — não existem rankings.
+
+- **Lead**: negociação criada no período que não é reativação (não começou em "Reativação" nem retomou uma negociação anterior).
+- **Chegou à consulta**: compareceu, passou por "Consulta realizada" ou fechou. **Recebeu orçamento**: orçamento registrado (fora rascunho) ou fechou.
+- **Perdas**: encerradas sem fechar no período (pela data de encerramento) + quem foi para "Sem resposta" no período.
 
 ## Onde está cada requisito
 

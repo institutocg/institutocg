@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Megaphone, MessageSquareText, Plus, Settings, SquareKanban, Sun, Users, Wallet } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, Megaphone, MessageSquareText, Plus, Settings, SquareKanban, Sun, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,6 +12,7 @@ const MENU = [
   { rotulo: "Mensagens", href: "/mensagens", icone: MessageSquareText, pronto: true },
   { rotulo: "Agenda", href: "/agenda", icone: CalendarDays, pronto: true },
   { rotulo: "Financeiro", href: "/financeiro", icone: Wallet, pronto: true },
+  { rotulo: "Indicadores", href: "/indicadores", icone: ChartNoAxesColumn, pronto: true },
   { rotulo: "Configurações", href: "/configuracoes", icone: Settings, pronto: true },
 ];
 

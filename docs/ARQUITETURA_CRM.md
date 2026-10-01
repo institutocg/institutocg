@@ -1042,6 +1042,19 @@ Tela **Financeiro**, pensada para a gestão do dia a dia — não é um software
 - Formas: PIX, cartão à vista, cartão parcelado, dinheiro e transferência. Cartão entra como recebido (sem lembretes de cobrança).
 - **Painel "O que eu tenho que fazer hoje"**: no dia do vencimento, "Pagamento previsto — Maria Silva — R$ 2.000,00" com *Ver paciente* e *Marcar como pago*; depois da data, "Pagamento atrasado — vencido há 3 dias", em urgente. A mensagem sugerida muda conforme o atraso (pagamento previsto → cobrança amigável → pagamento pendente).
 
+## 14.9 Indicadores comerciais e de marketing (implementado)
+
+Tela **Indicadores**, para entender o comportamento dos leads. É gestão da clínica: **sem ranking de pessoas da equipe e sem gamificação**.
+
+- **Filtro por período** em todos os indicadores: atalhos (este mês, mês passado, últimos 30 dias, últimos 90 dias, este ano) ou datas livres (de/até); filtro opcional por procedimento.
+- **Leads**: novos no período, convertidos (fecharam), ainda em negociação, sem resposta e perdidos. Lead = negociação que começou no período e não é reativação.
+- **Conversão**: novos leads → agendaram → chegaram à consulta → receberam orçamento → fecharam, com % sobre os leads e sobre o passo anterior.
+- **Funil**: em que etapa está agora cada pessoa que entrou no funil no período.
+- **Origem**: Instagram, indicação, Google, WhatsApp, paciente antigo e outro (cada origem cadastrada tem um `canal`; anúncios contam no canal de origem), com quantos fecharam; origens detalhadas sob demanda.
+- **Procedimentos**: os que geram mais procura, com quantos fecharam (clique para filtrar).
+- **Perdas**: preço, desistiu, não respondeu, escolheu outro local, adiou e outro (cada motivo de perda tem um `grupo_perda`), mais a lista dos motivos registrados.
+- **Reativação**: pacientes elegíveis (inativos, contatáveis, sem negociação aberta), pacientes reativados no período e o resultado (responderam, agendaram, fecharam, aguardando, sem retorno).
+
 ## 15. Decisões pendentes
 
 **Decidido:**

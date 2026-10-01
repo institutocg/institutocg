@@ -256,18 +256,18 @@ begin
     (c, 'Manutenção e limpeza',      'Prevenção',     6,    7),
     (c, 'Outros serviços',           'Outros',        null, 99);
 
-  insert into public.origens (clinica_id, nome, tipo, ordem) values
-    (c, 'Instagram',                   'organico',  1),
-    (c, 'Anúncio Instagram/Facebook',  'pago',      2),
-    (c, 'Google',                      'organico',  3),
-    (c, 'Anúncio Google',              'pago',      4),
-    (c, 'Site',                        'organico',  5),
-    (c, 'Indicação de paciente',       'indicacao', 6),
-    (c, 'Indicação de profissional',   'indicacao', 7),
-    (c, 'WhatsApp',                    'organico',  8),
-    (c, 'Passou em frente à clínica',  'organico',  9),
-    (c, 'Paciente antigo',             'interno',   10),
-    (c, 'Outro',                       'organico',  99);
+  insert into public.origens (clinica_id, nome, tipo, canal, ordem) values
+    (c, 'Instagram',                   'organico',  'instagram',       1),
+    (c, 'Anúncio Instagram/Facebook',  'pago',      'instagram',       2),
+    (c, 'Google',                      'organico',  'google',          3),
+    (c, 'Anúncio Google',              'pago',      'google',          4),
+    (c, 'Site',                        'organico',  'outro',           5),
+    (c, 'Indicação de paciente',       'indicacao', 'indicacao',       6),
+    (c, 'Indicação de profissional',   'indicacao', 'indicacao',       7),
+    (c, 'WhatsApp',                    'organico',  'whatsapp',        8),
+    (c, 'Passou em frente à clínica',  'organico',  'outro',           9),
+    (c, 'Paciente antigo',             'interno',   'paciente_antigo', 10),
+    (c, 'Outro',                       'organico',  'outro',           99);
 
   -- Etapas editáveis (nome, cor, prazo). O "marco"/"resultado" diz ao sistema o papel de cada uma.
   insert into public.etapas_funil (clinica_id, nome, ordem, tipo, resultado, marco, sla_dias, cor) values
@@ -283,28 +283,28 @@ begin
     (c, 'Não fechou',              9,  'perda',  'nao_fechou',   null,                    null, '#9A8F84'),
     (c, 'Desistiu',                10, 'perda',  'desistiu',     null,                    null, '#8A8178');
 
-  insert into public.motivos (clinica_id, nome, aplica_a, retorno_sugerido_dias, ordem) values
-    (c, 'Valor alto',                        'nao_fechou', 30,   1),
-    (c, 'Forma de pagamento',                'nao_fechou', 15,   2),
-    (c, 'Precisa pensar',                    'nao_fechou', 7,    3),
-    (c, 'Conversar com a família',           'nao_fechou', 7,    4),
-    (c, 'Medo ou insegurança',               'nao_fechou', 10,   5),
-    (c, 'Pesquisando outras clínicas',       'nao_fechou', 10,   6),
-    (c, 'Não é o momento',                   'nao_fechou', 90,   7),
-    (c, 'Momento financeiro',                'nao_fechou', 120,  8),
-    (c, 'Escolheu outra clínica',            'nao_fechou', 365,  9),
-    (c, 'Parou de responder',                'nao_fechou', 90,   10),
-    (c, 'Outro',                             'nao_fechou', null, 99),
-    (c, 'Sem interesse no momento',          'desistiu',   180,  1),
-    (c, 'Fez o tratamento em outro lugar',   'desistiu',   365,  2),
-    (c, 'Mudou de cidade',                   'desistiu',   null, 3),
-    (c, 'Outro',                             'desistiu',   null, 99),
-    (c, 'Imprevisto pessoal',                'desmarcou',  null, 1),
-    (c, 'Trabalho',                          'desmarcou',  null, 2),
-    (c, 'Saúde',                             'desmarcou',  null, 3),
-    (c, 'Financeiro',                        'desmarcou',  null, 4),
-    (c, 'Não informou',                      'desmarcou',  null, 5),
-    (c, 'Outro',                             'desmarcou',  null, 99);
+  insert into public.motivos (clinica_id, nome, aplica_a, retorno_sugerido_dias, grupo_perda, ordem) values
+    (c, 'Valor alto',                        'nao_fechou', 30,   'preco',         1),
+    (c, 'Forma de pagamento',                'nao_fechou', 15,   'preco',         2),
+    (c, 'Precisa pensar',                    'nao_fechou', 7,    'adiou',         3),
+    (c, 'Conversar com a família',           'nao_fechou', 7,    'adiou',         4),
+    (c, 'Medo ou insegurança',               'nao_fechou', 10,   'outro',         5),
+    (c, 'Pesquisando outras clínicas',       'nao_fechou', 10,   'outro_local',   6),
+    (c, 'Não é o momento',                   'nao_fechou', 90,   'adiou',         7),
+    (c, 'Momento financeiro',                'nao_fechou', 120,  'preco',         8),
+    (c, 'Escolheu outra clínica',            'nao_fechou', 365,  'outro_local',   9),
+    (c, 'Parou de responder',                'nao_fechou', 90,   'nao_respondeu', 10),
+    (c, 'Outro',                             'nao_fechou', null, 'outro',         99),
+    (c, 'Sem interesse no momento',          'desistiu',   180,  'desistiu',      1),
+    (c, 'Fez o tratamento em outro lugar',   'desistiu',   365,  'outro_local',   2),
+    (c, 'Mudou de cidade',                   'desistiu',   null, 'desistiu',      3),
+    (c, 'Outro',                             'desistiu',   null, 'desistiu',      99),
+    (c, 'Imprevisto pessoal',                'desmarcou',  null, null,            1),
+    (c, 'Trabalho',                          'desmarcou',  null, null,            2),
+    (c, 'Saúde',                             'desmarcou',  null, null,            3),
+    (c, 'Financeiro',                        'desmarcou',  null, null,            4),
+    (c, 'Não informou',                      'desmarcou',  null, null,            5),
+    (c, 'Outro',                             'desmarcou',  null, null,            99);
 
   insert into public.formas_pagamento (clinica_id, nome, permite_parcelamento, max_parcelas, recebe_na_hora, ordem) values
     (c, 'PIX',                          true,  24, false, 1),

@@ -188,6 +188,9 @@ create table public.origens (
   clinica_id     uuid not null references public.clinicas (id),
   nome           text not null check (length(btrim(nome)) >= 2),
   tipo           public.tipo_origem not null default 'organico',
+  -- Canal usado nos indicadores (agrupa anúncios e orgânico do mesmo lugar).
+  canal          text not null default 'outro'
+                 check (canal in ('instagram', 'indicacao', 'google', 'whatsapp', 'paciente_antigo', 'outro')),
   ordem          int not null default 0,
   ativo          boolean not null default true,
   criado_em      timestamptz not null default now(),
@@ -239,6 +242,8 @@ create table public.motivos (
   nome                    text not null check (length(btrim(nome)) >= 2),
   aplica_a                public.aplica_motivo not null,
   retorno_sugerido_dias   int check (retorno_sugerido_dias >= 0),
+  -- Grupo do motivo nos indicadores de perda.
+  grupo_perda             text check (grupo_perda in ('preco', 'desistiu', 'nao_respondeu', 'outro_local', 'adiou', 'outro')),
   ordem                   int not null default 0,
   ativo                   boolean not null default true,
   criado_em               timestamptz not null default now(),
