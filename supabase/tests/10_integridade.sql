@@ -96,7 +96,7 @@ select testes.ok((select count(*) from public.usuarios) = 4,
   'perfil de usuário é criado automaticamente a cada login novo');
 select testes.ok((select count(*) from public.procedimentos where clinica_id = testes.v('c1')) = 8
              and (select count(*) from public.etapas_funil where clinica_id = testes.v('c1')) = 10
-             and (select count(*) from public.formas_pagamento where clinica_id = testes.v('c1')) = 6,
+             and (select count(*) from public.formas_pagamento where clinica_id = testes.v('c1')) = 5,
   'clínica nasce com procedimentos, etapas do funil e formas de pagamento padrão');
 
 -- =============================================================================

@@ -18,9 +18,9 @@ grant execute on all functions in schema testes to authenticated, anon;
 
 \echo '— Formas de pagamento'
 select testes.ok((select string_agg(nome, ' | ' order by ordem) from public.formas_pagamento where clinica_id = testes.v('fc'))
-                   = 'PIX | Cartão à vista | Cartão parcelado | Dinheiro | Transferência | Parcelado direto com a clínica'
+                   = 'PIX | Cartão à vista | Cartão parcelado | Dinheiro | Transferência'
              and (select bool_and(recebe_na_hora) from public.formas_pagamento where clinica_id = testes.v('fc') and nome like 'Cartão%'),
-  'formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro, transferência e parcelado direto');
+  'formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro e transferência');
 
 reset role; select testes.entrar('sec@fin.local'); set role authenticated;
 

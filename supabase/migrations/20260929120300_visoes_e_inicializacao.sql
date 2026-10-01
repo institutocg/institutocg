@@ -311,8 +311,7 @@ begin
     (c, 'Cartão à vista',               false, 1,  true,  2),
     (c, 'Cartão parcelado',             true,  12, true,  3),
     (c, 'Dinheiro',                     true,  24, false, 4),
-    (c, 'Transferência',                true,  24, false, 5),
-    (c, 'Parcelado direto com a clínica', true, 24, false, 6);
+    (c, 'Transferência',                true,  24, false, 5);
 
   -- Mensagens prontas (editáveis em Mensagens). Tom: elegante, cordial, humano e sem pressão.
   -- "situacao" liga o modelo a uma tarefa específica; "padrao" é o sugerido na categoria.

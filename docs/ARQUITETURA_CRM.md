@@ -1037,7 +1037,7 @@ Tela **Financeiro**, pensada para a gestão do dia a dia — não é um software
 - **Pagamentos do mês**: data, paciente, procedimento, forma e valor.
 - **Negociações**: paciente, procedimento, valor, forma, entrada + parcelas (valor de cada), próximo vencimento ou data do pagamento, valor em aberto, status (pendente, parcialmente pago, pago, atrasado) e observações; filtros por status e busca por paciente; ao abrir, cada pagamento com suas ações.
 - **Registrar negociação**: paciente (busca), procedimento, valor, desconto, entrada (valor, data e forma próprias), forma de pagamento, parcelas, 1º vencimento e observações, com o cálculo das parcelas na hora. Também a partir da ficha ("Registrar negociação").
-- Formas: PIX, cartão à vista, cartão parcelado, dinheiro, transferência e parcelado direto com a clínica. Cartão entra como recebido (sem lembretes de cobrança).
+- Formas: PIX, cartão à vista, cartão parcelado, dinheiro e transferência. Cartão entra como recebido (sem lembretes de cobrança).
 - **Painel "O que eu tenho que fazer hoje"**: no dia do vencimento, "Pagamento previsto — Maria Silva — R$ 2.000,00" com *Ver paciente* e *Marcar como pago*; depois da data, "Pagamento atrasado — vencido há 3 dias", em urgente. A mensagem sugerida muda conforme o atraso (pagamento previsto → cobrança amigável → pagamento pendente).
 
 ## 15. Decisões pendentes

@@ -76,7 +76,7 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 
 Sem contabilidade: para cada negociação, **paciente, procedimento, valor, forma de pagamento, parcelas, valor de cada parcela, datas, status e observações**. Status de cada pagamento: *pendente*, *parcialmente pago*, *pago* e *atrasado* (calculado pela data).
 
-- Formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro, transferência e parcelado direto com a clínica. **Cartão é recebido na hora** (`recebe_na_hora`): entra como pago, sem lembretes de cobrança.
+- Formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro, e transferência. **Cartão é recebido na hora** (`recebe_na_hora`): entra como pago, sem lembretes de cobrança.
 - Pagamento com data futura → lembrete automático no painel na data ("Pagamento previsto — Maria Silva — R$ 2.000,00"); passou da data → "Pagamento atrasado — vencido há N dias", urgente. Pagou → o lembrete sai; pagou uma parte → o lembrete mostra o saldo; nova data combinada → o lembrete acompanha.
 - Resumo do mês: total recebido (e nº de pagamentos), previsto no mês, pendente, atrasado e vendido.
 
