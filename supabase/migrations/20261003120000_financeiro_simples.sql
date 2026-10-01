@@ -30,7 +30,8 @@ select
     when pa.status = 'pendente' then 'pendente'
     else pa.status::text
   end                                                              as situacao,
-  (select t.id from public.tarefas t where t.parcela_id = pa.id and t.status = 'pendente' limit 1) as tarefa_id
+  (select t.id from public.tarefas t where t.parcela_id = pa.id and t.status = 'pendente' limit 1) as tarefa_id,
+  o.procedimento_id
 from public.parcelas pa
 join public.vendas v on v.id = pa.venda_id
 join public.pessoas pe on pe.id = pa.pessoa_id
@@ -60,7 +61,8 @@ select
     when count(p.id) filter (where p.situacao = 'atrasado') > 0 then 'atrasado'
     when coalesce(sum(p.valor_pago_centavos), 0) > 0 then 'parcial'
     else 'pendente'
-  end                                           as situacao
+  end                                           as situacao,
+  o.procedimento_id
 from public.vendas v
 join public.pessoas pe on pe.id = v.pessoa_id
 left join public.oportunidades o on o.id = v.oportunidade_id
@@ -68,11 +70,11 @@ left join public.procedimentos pr on pr.id = o.procedimento_id
 left join public.formas_pagamento fp on fp.id = v.forma_pagamento_id
 left join public.v_financeiro_parcelas p on p.venda_id = v.id
 where v.status = 'ativa'
-group by v.id, pe.nome, pr.nome, fp.nome;
+group by v.id, pe.nome, pr.nome, fp.nome, o.procedimento_id;
 
 -- ─── Resumo do mês ───────────────────────────────────────────────────────────
 
-create or replace function public.resumo_financeiro(p_clinica uuid, p_mes date)
+create or replace function public.resumo_financeiro(p_clinica uuid, p_mes date, p_procedimento uuid default null)
 returns jsonb
 language sql
 stable
@@ -81,28 +83,69 @@ as $$
   with lim as (
     select date_trunc('month', p_mes)::date as ini,
            (date_trunc('month', p_mes) + interval '1 month')::date as fim
+  ),
+  -- Parcelas do filtro (todas, ou só as do procedimento escolhido).
+  p as (
+    select * from public.v_financeiro_parcelas
+     where clinica_id = p_clinica and (p_procedimento is null or procedimento_id = p_procedimento)
+  ),
+  pg as (
+    select pg.* from public.pagamentos pg join p on p.id = pg.parcela_id, lim
+     where pg.estornado_em is null and pg.pago_em >= lim.ini and pg.pago_em < lim.fim
   )
   select jsonb_build_object(
-    'recebido_mes', coalesce((select sum(pg.valor_centavos) from public.pagamentos pg, lim
-                               where pg.clinica_id = p_clinica and pg.estornado_em is null
-                                 and pg.pago_em >= lim.ini and pg.pago_em < lim.fim), 0),
-    'pagamentos_mes', (select count(*) from public.pagamentos pg, lim
-                        where pg.clinica_id = p_clinica and pg.estornado_em is null
-                          and pg.pago_em >= lim.ini and pg.pago_em < lim.fim),
-    'previsto_mes', coalesce((select sum(p.saldo_centavos) from public.v_financeiro_parcelas p, lim
-                               where p.clinica_id = p_clinica and p.situacao <> 'pago'
-                                 and p.vencimento >= lim.ini and p.vencimento < lim.fim), 0),
-    'pendente', coalesce((select sum(p.saldo_centavos) from public.v_financeiro_parcelas p
-                           where p.clinica_id = p_clinica and p.situacao in ('pendente', 'parcial')), 0),
-    'atrasado', coalesce((select sum(p.saldo_centavos) from public.v_financeiro_parcelas p
-                           where p.clinica_id = p_clinica and p.situacao = 'atrasado'), 0),
-    'atrasados', (select count(*) from public.v_financeiro_parcelas p
-                   where p.clinica_id = p_clinica and p.situacao = 'atrasado'),
-    'vendido_mes', coalesce((select sum(v.valor_final_centavos) from public.vendas v, lim
+    'recebido_mes', coalesce((select sum(valor_centavos) from pg), 0),
+    'pagamentos_mes', (select count(*) from pg),
+    'previsto_mes', coalesce((select sum(p.saldo_centavos) from p, lim
+                               where p.situacao <> 'pago' and p.vencimento >= lim.ini and p.vencimento < lim.fim), 0),
+    'pendente', coalesce((select sum(p.saldo_centavos) from p where p.situacao in ('pendente', 'parcial')), 0),
+    'atrasado', coalesce((select sum(p.saldo_centavos) from p where p.situacao = 'atrasado'), 0),
+    'atrasados', (select count(*) from p where p.situacao = 'atrasado'),
+    'vendido_mes', coalesce((select sum(v.valor_final_centavos)
+                               from public.vendas v left join public.oportunidades o on o.id = v.oportunidade_id, lim
                               where v.clinica_id = p_clinica and v.status = 'ativa' and v.tipo = 'venda'
+                                and (p_procedimento is null or o.procedimento_id = p_procedimento)
                                 and v.fechada_em >= lim.ini and v.fechada_em < lim.fim), 0)
   );
 $$;
+
+-- Quadro por procedimento: vendido e recebido no mês, em aberto e atrasado.
+create or replace function public.financeiro_por_procedimento(p_clinica uuid, p_mes date)
+returns table (procedimento_id uuid, procedimento text, negociacoes bigint, vendido_mes bigint, recebido_mes bigint,
+               em_aberto bigint, atrasado bigint)
+language sql
+stable
+set search_path = public
+as $$
+  with lim as (
+    select date_trunc('month', p_mes)::date as ini, (date_trunc('month', p_mes) + interval '1 month')::date as fim
+  ),
+  neg as (
+    select n.procedimento_id,
+           count(*) as negociacoes,
+           sum(n.valor_final_centavos) filter (where n.tipo = 'venda' and n.fechada_em >= lim.ini and n.fechada_em < lim.fim) as vendido,
+           sum(n.saldo_centavos) as em_aberto,
+           sum(n.atrasado_centavos) as atrasado
+      from public.v_financeiro_negociacoes n, lim
+     where n.clinica_id = p_clinica
+     group by n.procedimento_id
+  ),
+  rec as (
+    select p.procedimento_id, sum(pg.valor_centavos) as recebido
+      from public.pagamentos pg join public.v_financeiro_parcelas p on p.id = pg.parcela_id, lim
+     where p.clinica_id = p_clinica and pg.estornado_em is null and pg.pago_em >= lim.ini and pg.pago_em < lim.fim
+     group by p.procedimento_id
+  )
+  select neg.procedimento_id, coalesce(pr.nome, 'Sem procedimento informado'), neg.negociacoes,
+         coalesce(neg.vendido, 0)::bigint, coalesce(rec.recebido, 0)::bigint,
+         coalesce(neg.em_aberto, 0)::bigint, coalesce(neg.atrasado, 0)::bigint
+    from neg
+    left join rec on rec.procedimento_id is not distinct from neg.procedimento_id
+    left join public.procedimentos pr on pr.id = neg.procedimento_id
+   order by 5 desc, 4 desc, 2;
+$$;
+
+
 
 -- ─── Cartão: recebido no ato (sem lembretes de cobrança) ─────────────────────
 
@@ -295,7 +338,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.resumo_financeiro(uuid, date) from anon;
+revoke execute on function public.resumo_financeiro(uuid, date, uuid) from anon;
+revoke execute on function public.financeiro_por_procedimento(uuid, date) from anon;
 revoke execute on function public.registrar_negociacao(uuid, uuid, uuid, bigint, bigint, bigint, date, uuid, int, date, uuid, text) from anon;
 revoke execute on function public.registrar_pagamento(uuid, bigint, date, uuid, text) from anon;
 revoke execute on function public.mudar_vencimento(uuid, date, text) from anon;

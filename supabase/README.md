@@ -78,7 +78,7 @@ Sem contabilidade: para cada negociação, **paciente, procedimento, valor, form
 
 - Formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro, e transferência. **Cartão é recebido na hora** (`recebe_na_hora`): entra como pago, sem lembretes de cobrança.
 - Pagamento com data futura → lembrete automático no painel na data ("Pagamento previsto — Maria Silva — R$ 2.000,00"); passou da data → "Pagamento atrasado — vencido há N dias", urgente. Pagou → o lembrete sai; pagou uma parte → o lembrete mostra o saldo; nova data combinada → o lembrete acompanha.
-- Resumo do mês: total recebido (e nº de pagamentos), previsto no mês, pendente, atrasado e vendido.
+- Resumo do mês: total recebido (e nº de pagamentos), previsto no mês, pendente, atrasado e vendido — com filtro opcional por procedimento (`resumo_financeiro(clínica, mês, procedimento)`); quadro `financeiro_por_procedimento(clínica, mês)`.
 
 ## Onde está cada requisito
 

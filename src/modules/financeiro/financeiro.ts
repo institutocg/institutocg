@@ -62,6 +62,16 @@ export interface NegociacaoFin {
   situacao: Situacao;
 }
 
+export interface PorProcedimento {
+  procedimento_id: string | null;
+  procedimento: string;
+  negociacoes: number;
+  vendido_mes: number;
+  recebido_mes: number;
+  em_aberto: number;
+  atrasado: number;
+}
+
 export interface PagamentoMes {
   id: string;
   pago_em: DataCivil;

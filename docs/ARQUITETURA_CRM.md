@@ -1033,6 +1033,8 @@ Seção **Mensagens prontas** (menu "Mensagens"), organizada por situação: pri
 Tela **Financeiro**, pensada para a gestão do dia a dia — não é um software contábil.
 
 - **Resumo do mês** (com navegação entre meses): recebido, previsto no mês, pendente, atrasado e vendido.
+- **Filtro por procedimento** no topo: resumo, atrasados, próximos 30 dias, pagamentos do mês e negociações passam a mostrar só aquele procedimento.
+- **Por procedimento**: quadro com negociações, vendido e recebido no mês, em aberto e atrasado de cada procedimento (clique para filtrar).
 - **Pagamentos atrasados** e **próximos 30 dias**, cada um com *Marcar como pago* (total ou só uma parte, com data e forma) e *Mudar data*.
 - **Pagamentos do mês**: data, paciente, procedimento, forma e valor.
 - **Negociações**: paciente, procedimento, valor, forma, entrada + parcelas (valor de cada), próximo vencimento ou data do pagamento, valor em aberto, status (pendente, parcialmente pago, pago, atrasado) e observações; filtros por status e busca por paciente; ao abrir, cada pagamento com suas ações.

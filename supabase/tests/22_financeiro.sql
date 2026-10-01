@@ -109,6 +109,18 @@ select testes.ok((select (r ->> 'recebido_mes')::bigint = 200000 + 360000
                   from public.resumo_financeiro(testes.v('fc'), testes.hoje()) r),
   'resumo: total recebido no mês, pendente, atrasado, vendido e pagamentos do mês');
 
+\echo '— Filtro e quadro por procedimento'
+select testes.ok((select (r ->> 'recebido_mes')::bigint = 200000 and (r ->> 'vendido_mes')::bigint = 500000
+                     and (r ->> 'pendente')::bigint = 300000
+                  from public.resumo_financeiro(testes.v('fc'), testes.hoje(),
+                         (select id from public.procedimentos where clinica_id = testes.v('fc') and nome = 'Facetas de porcelana')) r),
+  'resumo filtrado por procedimento (facetas): só os valores das facetas');
+select testes.ok((select recebido_mes = 200000 and em_aberto = 300000 and vendido_mes = 500000 and negociacoes = 1
+                  from public.financeiro_por_procedimento(testes.v('fc'), testes.hoje()) where procedimento = 'Facetas de porcelana')
+             and (select recebido_mes = 360000 and em_aberto = 0
+                  from public.financeiro_por_procedimento(testes.v('fc'), testes.hoje()) where procedimento = 'Sem procedimento informado'),
+  'quadro por procedimento: vendido, recebido, em aberto e atrasado de cada procedimento');
+
 \echo '— Segurança'
 reset role; select testes.entrar('intruso@outra.local'); set role authenticated;
 select testes.erro(format($$select public.registrar_negociacao(%L, %L, null, 100000, 0, 0, null, null, 1, null, %L)$$,

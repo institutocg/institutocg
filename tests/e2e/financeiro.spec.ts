@@ -30,6 +30,28 @@ test("visão do mês: recebido, previsto, pendente, atrasado e vendido", async (
   await expect(paulo).toContainText("Atrasado");
 });
 
+test("filtrar a visão financeira por procedimento", async ({ page }) => {
+  await entrar(page);
+  await page.goto("/financeiro");
+  const quadro = page.getByRole("table", { name: "Financeiro por procedimento" });
+  await expect(quadro.getByRole("row", { name: /Facetas\/lentes em resina/ })).toContainText("R$ 10.800,00"); // em aberto
+  await expect(quadro.getByRole("row", { name: /Sem procedimento informado/ })).toContainText("R$ 800,00"); // atrasado (saldo anterior)
+
+  await page.getByLabel("Procedimento", { exact: true }).selectOption({ label: "Facetas/lentes em resina" });
+  await expect(page).toHaveURL(/procedimento=/);
+  await expect(page.getByText("Mostrando apenas Facetas/lentes em resina.")).toBeVisible();
+  await expect(tile(page, "Atrasado")).toContainText("R$ 0,00");
+  await expect(page.getByText("Nenhum pagamento atrasado.")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Lista de negociações" }).getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByRole("listitem", { name: "Ana Costa — Facetas/lentes em resina" })).toBeVisible();
+  await expect(quadro).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Ver todos os procedimentos" }).click();
+  await expect(tile(page, "Atrasado")).toContainText("R$ 800,00");
+  await quadro.getByRole("link", { name: "Facetas/lentes em resina" }).click();
+  await expect(page.getByText("Mostrando apenas Facetas/lentes em resina.")).toBeVisible();
+});
+
 test("registrar negociação com entrada em data futura cria os lembretes", async ({ page }) => {
   await entrar(page);
   await page.goto("/financeiro");

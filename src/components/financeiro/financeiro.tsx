@@ -2,6 +2,7 @@
 
 import { CalendarClock, HandCoins, Plus, Search, UserRound, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cloneElement, useEffect, useId, useState, useTransition, type ReactElement } from "react";
 import { buscarPacientes, type PacienteEncontrado } from "@/app/(app)/agenda/acoes";
 import { registrarNegociacao, type FormaPagamento } from "@/app/(app)/financeiro/acoes";
@@ -349,5 +350,37 @@ export function VerPaciente({ pessoaId }: { pessoaId: string }) {
     <Link href={`/contatos/${pessoaId}#financeiro`} className={BOTAO}>
       <UserRound className="size-4" /> Ver paciente
     </Link>
+  );
+}
+
+/** Filtra toda a visão financeira por procedimento (mantém mês, status e busca). */
+export function FiltroProcedimento({ procedimentos, atual }: { procedimentos: { id: string; nome: string }[]; atual: string }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const id = useId();
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor={id} className="text-sm text-suave">
+        Procedimento
+      </label>
+      <select
+        id={id}
+        value={atual}
+        onChange={(e) => {
+          const q = new URLSearchParams(params.toString());
+          if (e.target.value) q.set("procedimento", e.target.value);
+          else q.delete("procedimento");
+          router.push(`/financeiro?${q}`);
+        }}
+        className="rounded-lg border border-borda-forte bg-superficie px-3 py-1.5 text-sm outline-none focus:border-dourado"
+      >
+        <option value="">Todos os procedimentos</option>
+        {procedimentos.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.nome}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
