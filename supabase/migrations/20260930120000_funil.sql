@@ -150,6 +150,8 @@ begin
     perform public.gerar_parcelas(v_venda, coalesce(nullif(vd ->> 'primeiro_vencimento', '')::date,
                                                     case when v_entr > 0 then v_hoje + 30 else v_hoje end),
                                   coalesce(nullif(vd ->> 'vencimento_entrada', '')::date, v_hoje));
+    -- Cartão: recebido no ato.
+    perform public.quitar_recebidos_na_hora(v_venda);
   end if;
 
   perform set_config('crm.acao_manual', '', true);

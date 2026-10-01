@@ -306,13 +306,13 @@ begin
     (c, 'Não informou',                      'desmarcou',  null, 5),
     (c, 'Outro',                             'desmarcou',  null, 99);
 
-  insert into public.formas_pagamento (clinica_id, nome, permite_parcelamento, max_parcelas, ordem) values
-    (c, 'PIX',                    true,  24, 1),
-    (c, 'Cartão de crédito',      true,  12, 2),
-    (c, 'Cartão de débito',       false, 1,  3),
-    (c, 'Dinheiro',               true,  24, 4),
-    (c, 'Transferência bancária', true,  24, 5),
-    (c, 'Boleto',                 true,  24, 6);
+  insert into public.formas_pagamento (clinica_id, nome, permite_parcelamento, max_parcelas, recebe_na_hora, ordem) values
+    (c, 'PIX',                          true,  24, false, 1),
+    (c, 'Cartão à vista',               false, 1,  true,  2),
+    (c, 'Cartão parcelado',             true,  12, true,  3),
+    (c, 'Dinheiro',                     true,  24, false, 4),
+    (c, 'Transferência',                true,  24, false, 5),
+    (c, 'Parcelado direto com a clínica', true, 24, false, 6);
 
   -- Mensagens prontas (editáveis em Mensagens). Tom: elegante, cordial, humano e sem pressão.
   -- "situacao" liga o modelo a uma tarefa específica; "padrao" é o sugerido na categoria.

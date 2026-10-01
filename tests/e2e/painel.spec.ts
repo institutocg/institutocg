@@ -78,14 +78,15 @@ test("painel completo: atrasadas, urgente, importante, rotina e próximos dias",
 
   // Exemplo 3: pagamento previsto hoje
   const ana = cartao(page, "Ana Costa — R$ 2.700,00");
-  await expect(ana.getByText("Pagamento previsto hoje")).toBeVisible();
+  await expect(ana.getByText("Pagamento previsto", { exact: true })).toBeVisible();
   await expect(ana.getByText("Facetas/lentes em resina")).toBeVisible();
-  await expect(ana.getByRole("link", { name: "Ver negociação" })).toBeVisible();
+  await expect(ana.getByRole("link", { name: "Ver paciente" })).toBeVisible();
   await expect(ana.getByRole("button", { name: "Marcar como pago" })).toBeVisible();
 
   // Pagamento atrasado
   const paulo = cartao(page, "Paulo Ribeiro — R$ 800,00");
-  await expect(paulo.getByText("Pagamento em atraso há 5 dias")).toBeVisible();
+  await expect(paulo.getByText("Pagamento atrasado", { exact: true })).toBeVisible();
+  await expect(paulo.getByText(/Vencido há 5 dias/)).toBeVisible();
   await expect(bloco(page, "Atrasadas").getByText("Atrasada há 5 dias")).toBeVisible();
 });
 

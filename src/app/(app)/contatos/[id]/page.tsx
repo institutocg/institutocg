@@ -392,6 +392,22 @@ export default async function FichaPaciente({
       {/* FINANCEIRO */}
       <Secao id="financeiro" titulo="Financeiro" className="mt-6">
         <Financeiro ficha={ficha} />
+        {ficha.financeiro && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href={`/financeiro?nova=${c.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3 py-1.5 text-sm hover:border-dourado"
+            >
+              Registrar negociação
+            </Link>
+            <Link
+              href={`/financeiro?q=${encodeURIComponent(c.nome)}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3 py-1.5 text-sm hover:border-dourado"
+            >
+              Ver no financeiro
+            </Link>
+          </div>
+        )}
       </Secao>
 
       {/* TAREFAS */}

@@ -254,6 +254,8 @@ create table public.formas_pagamento (
   nome                  text not null check (length(btrim(nome)) >= 2),
   permite_parcelamento  boolean not null default false,
   max_parcelas          int not null default 1 check (max_parcelas between 1 and 60),
+  -- Recebido no ato (ex.: cartão): o paciente não fica devendo à clínica, então não há lembretes.
+  recebe_na_hora        boolean not null default false,
   ordem                 int not null default 0,
   ativo                 boolean not null default true,
   criado_em             timestamptz not null default now(),

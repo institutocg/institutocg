@@ -97,14 +97,6 @@ export async function registrarContato(dados: DadosRegistro): Promise<Retorno> {
   }, "Contato registrado.");
 }
 
-export async function marcarComoPago(parcelaId: string): Promise<Retorno> {
-  if (!uuid.safeParse(parcelaId).success) return { ok: false, erro: "Parcela inválida." };
-  return executar(async (db) => {
-    await db.query("select public.marcar_parcela_paga($1)", [parcelaId]);
-    return null;
-  }, "Pagamento registrado.");
-}
-
 const esquemaEdicao = z.object({
   tarefaId: uuid,
   titulo: z.string().trim().min(2, "Escreva o que precisa ser feito.").max(200),

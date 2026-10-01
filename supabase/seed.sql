@@ -22,7 +22,7 @@ declare
 begin
   select id into prof from public.profissionais where clinica_id = c limit 1;
   select id into pix from public.formas_pagamento where clinica_id = c and nome = 'PIX';
-  select id into credito from public.formas_pagamento where clinica_id = c and nome = 'Cartão de crédito';
+  select id into credito from public.formas_pagamento where clinica_id = c and nome = 'Cartão parcelado';
 
   -- 1. Beatriz: novo contato que chegou hoje pelo Instagram → primeiro contato (urgente)
   insert into public.pessoas (clinica_id, nome, whatsapp_e164, cidade, uf, origem_id, temperatura)

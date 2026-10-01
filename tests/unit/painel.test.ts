@@ -113,7 +113,7 @@ describe("textos do cartão", () => {
       procedimento: "Facetas",
     });
     const c = montarCartao(t, HOJE);
-    expect(c.titulo).toBe("Pagamento previsto hoje");
+    expect(c.titulo).toBe("Pagamento previsto");
     expect(c.subtitulo).toBe("Maria Silva — R$ 2.500,00");
     expect(c.procedimento).toBe("Facetas");
     expect(c.motivo).toBe("Parcela 2 de 10 · vencimento 29/09");
@@ -124,10 +124,12 @@ describe("textos do cartão", () => {
 
   it("pagamento em atraso: singular e plural; entrada", () => {
     const base = { tipo: "confirmar_pagamento" as const, parcela_saldo_centavos: 80_000 };
-    expect(montarCartao(tarefa({ ...base, vence_em: "2026-09-28", parcela_vencimento: "2026-09-28" }), HOJE).titulo)
-      .toBe("Pagamento em atraso há 1 dia");
+    const um = montarCartao(tarefa({ ...base, vence_em: "2026-09-28", parcela_vencimento: "2026-09-28" }), HOJE);
+    expect(um.titulo).toBe("Pagamento atrasado");
+    expect(um.motivo).toMatch(/^Vencido há 1 dia · /);
     const c = montarCartao(tarefa({ ...base, vence_em: "2026-09-24", parcela_vencimento: "2026-09-24" }), HOJE);
-    expect(c.titulo).toBe("Pagamento em atraso há 5 dias");
+    expect(c.titulo).toBe("Pagamento atrasado");
+    expect(c.motivo).toMatch(/^Vencido há 5 dias · /);
     expect(c.acaoRecomendada).toBe("Lembrar Maria do pagamento, com gentileza.");
     expect(motivoDoContato(tarefa({ ...base, parcela_numero: 0, parcela_vencimento: HOJE }), HOJE))
       .toBe("Entrada · vencimento 29/09");
@@ -138,7 +140,8 @@ describe("textos do cartão", () => {
       tarefa({ tipo: "confirmar_pagamento", vence_em: "2026-10-01", parcela_vencimento: "2026-09-25", parcela_saldo_centavos: 100 }),
       HOJE,
     );
-    expect(c.titulo).toBe("Pagamento em atraso há 4 dias");
+    expect(c.titulo).toBe("Pagamento atrasado");
+    expect(c.motivo).toMatch(/^Vencido há 4 dias/);
   });
 
   it("primeiro contato mostra origem e quando chegou; tentativas seguintes", () => {

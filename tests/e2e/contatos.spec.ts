@@ -192,7 +192,7 @@ test("ficha com financeiro: negociação, valores e parcelas", async ({ page }) 
   await expect(fin.getByText("Total R$ 12.500,00 − desconto R$ 500,00 · Parcelado em 4x · PIX")).toBeVisible();
   await expect(fin.getByRole("row", { name: /Entrada/ })).toContainText("Paga");
   await expect(fin.getByRole("row", { name: /1 de 4/ })).toContainText("Vence hoje");
-  await expect(page.getByRole("region", { name: "Próxima ação" }).getByText("Pagamento previsto hoje")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Próxima ação" }).getByText("Pagamento previsto", { exact: true })).toBeVisible();
   // Paciente ativo, pagando o tratamento: não é oportunidade de resgate.
   await expect(page.getByText("Oportunidade de resgate")).toHaveCount(0);
 });

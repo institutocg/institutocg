@@ -86,7 +86,7 @@ export interface Cartao {
   /** Título da tarefa como está gravado (editável pela usuária). */
   tituloTarefa: string;
   horario: string | null;
-  /** Linha principal: nome da pessoa (ou "Pagamento previsto hoje" nos pagamentos). */
+  /** Linha principal: nome da pessoa (ou "Pagamento previsto" / "Pagamento atrasado" nos pagamentos). */
   titulo: string;
   /** Linha secundária dos pagamentos: "Maria Silva — R$ 2.500,00". */
   subtitulo: string | null;
@@ -267,7 +267,10 @@ export function motivoDoContato(t: TarefaAberta, hoje: DataCivil): string {
             ? `Parcela ${t.parcela_numero} de ${t.parcela_total}`
             : "Pagamento";
       const venc = t.parcela_vencimento ?? t.vence_em;
-      return `${parcela} · vencimento ${ddmm(venc)}`;
+      const atraso = diasEntre(venc, hoje);
+      return atraso > 0
+        ? `Vencido há ${atraso} ${atraso === 1 ? "dia" : "dias"} · ${parcela} · vencimento ${ddmm(venc)}`
+        : `${parcela} · vencimento ${ddmm(venc)}`;
     }
     case "acompanhar_decisao": {
       // Depois da consulta (onde o orçamento é apresentado): a pessoa está decidindo.
@@ -382,9 +385,9 @@ export function montarCartao(t: TarefaAberta, hoje: DataCivil): Cartao {
     titulo =
       atrasoPagamento === 0
         ? vencimento === hoje
-          ? "Pagamento previsto hoje"
+          ? "Pagamento previsto"
           : `Pagamento previsto para ${ddmm(vencimento)}`
-        : `Pagamento em atraso há ${atrasoPagamento} ${atrasoPagamento === 1 ? "dia" : "dias"}`;
+        : "Pagamento atrasado";
     subtitulo = valor !== null ? `${t.pessoa_nome} — ${formatarMoeda(valor)}` : t.pessoa_nome;
   }
 

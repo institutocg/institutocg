@@ -16,6 +16,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20260930130000_tratamento_e_campanhas.sql` | Fechou → "em tratamento"; `concluir_tratamento()` (agenda o convite de retorno); campanhas de reativação (`prever_campanha`, `criar_campanha`, `encerrar_campanha`, visão `v_campanhas`) |
 | `20261001120000_agenda.sql` | **Agenda comercial**: `agendar()` (paciente existente ou novo, procedimento, data, horário, dentista, status; horário de atendimento e conflito por dentista), `desmarcar_consulta()`, `remarcar_consulta()`, `mudar_status_consulta()`, `buscar_pacientes()`, garantia de recuperação e visões `v_agenda` e `v_recuperacao` |
 | `20261002120000_mensagens.sql` | **Mensagens prontas**: variáveis de cada tarefa/paciente (`variaveis_tarefa`, `variaveis_pessoa`), situação da mensagem (pagamentos mudam com o atraso), `sugestoes_mensagem(tarefa)` e `mensagens_para_pessoa(pessoa)`; um modelo padrão por situação e procedimento |
+| `20261003120000_financeiro_simples.sql` | **Financeiro simples**: `registrar_negociacao()` (paciente, procedimento, valor, entrada com data e forma próprias, parcelas, forma, observações), `registrar_pagamento()` (total ou parcial), `mudar_vencimento()`, `quitar_recebidos_na_hora()` (cartão), visões `v_financeiro_parcelas` / `v_financeiro_negociacoes` e `resumo_financeiro(mês)` |
 
 ## Motor de ações — regras de follow-up configuráveis
 
@@ -71,6 +72,14 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 - **Nada é enviado automaticamente**: a mensagem é apresentada para copiar, adaptar e enviar pelo canal que a usuária preferir.
 - Toda a equipe cria e edita mensagens (sem exclusão: arquiva-se); alterações vão para a auditoria.
 
+## Financeiro simples (contas a receber)
+
+Sem contabilidade: para cada negociação, **paciente, procedimento, valor, forma de pagamento, parcelas, valor de cada parcela, datas, status e observações**. Status de cada pagamento: *pendente*, *parcialmente pago*, *pago* e *atrasado* (calculado pela data).
+
+- Formas iniciais: PIX, cartão à vista, cartão parcelado, dinheiro, transferência e parcelado direto com a clínica. **Cartão é recebido na hora** (`recebe_na_hora`): entra como pago, sem lembretes de cobrança.
+- Pagamento com data futura → lembrete automático no painel na data ("Pagamento previsto — Maria Silva — R$ 2.000,00"); passou da data → "Pagamento atrasado — vencido há N dias", urgente. Pagou → o lembrete sai; pagou uma parte → o lembrete mostra o saldo; nova data combinada → o lembrete acompanha.
+- Resumo do mês: total recebido (e nº de pagamentos), previsto no mês, pendente, atrasado e vendido.
+
 ## Onde está cada requisito
 
 | Requisito | Onde |
@@ -103,7 +112,7 @@ A tela mostra **seis casos e o grupo "Paciente antigo"**; os passos automáticos
 npm run test:db    # sobe um PostgreSQL temporário, aplica as migrações, o seed e os testes
 ```
 
-Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, `18_regras_e_campanhas.sql`, `19_agenda.sql` e `21_mensagens.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
+Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, `18_regras_e_campanhas.sql`, `19_agenda.sql`, `21_mensagens.sql` e `22_financeiro.sql`) cobrem relacionamentos, regras de acesso, histórico, lembretes financeiros e isolamento entre clínicas. `tests/00_simulacao_supabase.sql` imita o mínimo do Supabase e **não** deve ser aplicado no projeto real.
 
 ## Implantação no Supabase (quando formos para produção)
 

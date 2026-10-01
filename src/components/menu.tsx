@@ -11,7 +11,7 @@ const MENU = [
   { rotulo: "Campanhas", href: "/campanhas", icone: Megaphone, pronto: true },
   { rotulo: "Mensagens", href: "/mensagens", icone: MessageSquareText, pronto: true },
   { rotulo: "Agenda", href: "/agenda", icone: CalendarDays, pronto: true },
-  { rotulo: "Financeiro", href: "#", icone: Wallet, pronto: false },
+  { rotulo: "Financeiro", href: "/financeiro", icone: Wallet, pronto: true },
   { rotulo: "Configurações", href: "/configuracoes", icone: Settings, pronto: true },
 ];
 

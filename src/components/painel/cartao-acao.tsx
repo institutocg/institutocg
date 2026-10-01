@@ -8,16 +8,15 @@ import {
   concluirTarefa,
   editarTarefa,
   listarDentistas,
-  marcarComoPago,
   registrarContato,
   type DadosRegistro,
   type Retorno,
 } from "@/app/(app)/hoje/acoes";
 import { sugestoesDaTarefa } from "@/app/(app)/mensagens/acoes";
 import { avisar } from "@/components/avisos";
+import { JanelaPagamento } from "@/components/financeiro/pagamento";
 import { copiarTexto } from "@/components/mensagens/biblioteca";
 import { Dialogo } from "@/components/dialogo";
-import { formatarMoeda } from "@/lib/moeda";
 import { linkWhatsApp } from "@/lib/telefone";
 import { ROTULO_CATEGORIA, type Sugestao } from "@/modules/mensagens/mensagens";
 import type { Motivo } from "@/modules/painel/consultas";
@@ -127,7 +126,7 @@ export function CartaoAcao({
               case "ver_negociacao":
                 return (
                   <BotaoLink key={b} href={`/contatos/${cartao.pessoaId}#financeiro`} icone={<UserRound className="size-4" />}>
-                    Ver negociação
+                    Ver paciente
                   </BotaoLink>
                 );
               case "ver_mensagem":
@@ -183,30 +182,15 @@ export function CartaoAcao({
         pendente={pendente}
         enviar={(dados) => executar(() => registrarContato(dados))}
       />
-      <Dialogo
-        aberto={janela === "pago"}
-        aoFechar={() => setJanela(null)}
-        titulo="Confirmar pagamento"
-        subtitulo={cartao.subtitulo}
-      >
-        <p className="text-sm text-suave">
-          Registrar o recebimento de{" "}
-          <strong className="text-grafite">
-            {cartao.valorCentavos !== null ? formatarMoeda(cartao.valorCentavos) : "o valor em aberto"}
-          </strong>{" "}
-          com data de hoje? O lembrete sai da lista automaticamente.
-        </p>
-        <Rodape>
-          <Botao onClick={() => setJanela(null)}>Cancelar</Botao>
-          <Botao
-            principal
-            disabled={pendente || !cartao.parcelaId}
-            onClick={() => executar(() => marcarComoPago(cartao.parcelaId!))}
-          >
-            {pendente ? "Salvando…" : "Confirmar pagamento"}
-          </Botao>
-        </Rodape>
-      </Dialogo>
+      {cartao.parcelaId && (
+        <JanelaPagamento
+          parcelaId={cartao.parcelaId}
+          saldoCentavos={cartao.valorCentavos}
+          subtitulo={cartao.subtitulo}
+          aberto={janela === "pago"}
+          aoFechar={() => setJanela(null)}
+        />
+      )}
     </article>
   );
 }
