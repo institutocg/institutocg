@@ -1042,6 +1042,17 @@ Tela **Financeiro**, pensada para a gestão do dia a dia — não é um software
 - Formas: PIX, cartão à vista, cartão parcelado, dinheiro e transferência. Cartão entra como recebido (sem lembretes de cobrança).
 - **Painel "O que eu tenho que fazer hoje"**: no dia do vencimento, "Pagamento previsto — Maria Silva — R$ 2.000,00" com *Ver paciente* e *Marcar como pago*; depois da data, "Pagamento atrasado — vencido há 3 dias", em urgente. A mensagem sugerida muda conforme o atraso (pagamento previsto → cobrança amigável → pagamento pendente).
 
+## 14.8.1 Agenda integrada ao financeiro (implementado)
+
+O financeiro nasce da agenda, sem preenchimento à parte:
+
+- **Ao agendar**: campo *Valor do procedimento* (opcional). Remarcar leva o valor junto. O valor aparece no cartão da consulta.
+- **Ao marcar "Compareceu"**: no mesmo passo, *como ficou o pagamento* — **Pagou agora** (valor e forma → entra como pago), **Vai pagar depois** (forma, data prevista e parcelas → lembrete no painel na data, "Pagamento atrasado" se passar), **Já está no Financeiro** (sugerido quando o paciente já tem uma negociação registrada pelo funil ou pelo Financeiro) ou **Sem cobrança** (avaliação gratuita, cortesia). Cartão entra como recebido.
+- Quem já está como "Compareceu" sem pagamento registrado tem o botão **Registrar pagamento**.
+- Na agenda, cada consulta mostra o valor e a situação (*A receber*, *Pago*, *Pagamento atrasado*).
+- Procedimento pago fecha a negociação no funil ("Fechou"); avaliação, retorno e manutenção entram no Financeiro sem fechar a negociação.
+- O dashboard do Financeiro continua igual, agora alimentado também pela agenda (o procedimento da cobrança vem da consulta).
+
 ## 14.9 Indicadores comerciais e de marketing (implementado)
 
 Tela **Indicadores**, para entender o comportamento dos leads. É gestão da clínica: **sem ranking de pessoas da equipe e sem gamificação**.

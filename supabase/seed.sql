@@ -238,6 +238,19 @@ begin
     from public.pessoas pe join public.oportunidades o on o.pessoa_id = pe.id and o.status = 'aberta'
    where pe.clinica_id = c and pe.nome = 'Luiza Prado';
 
+  -- Consulta de hoje, com o valor do procedimento: para testar "Compareceu" + pagamento.
+  insert into public.pessoas (clinica_id, nome, whatsapp_e164, cidade, uf, origem_id)
+  values (c, 'Renata Alves', '+5511900000016', 'São Paulo', 'SP',
+          (select id from public.origens where clinica_id = c and nome = 'Indicação de paciente'))
+  returning id into p;
+  insert into public.agendamentos (clinica_id, pessoa_id, profissional_id, tipo, procedimento_id, inicio, duracao_min,
+                                   status, confirmado_em, valor_centavos)
+  values (c, p, (select id from public.profissionais where clinica_id = c and nome = 'Dra. Lívia Moraes'), 'procedimento',
+          (select id from public.procedimentos where clinica_id = c and nome = 'Clareamento dental'),
+          (hoje + time '08:30') at time zone 'America/Sao_Paulo', 60, 'confirmado', now(), 180000);
+  update public.agendamentos set valor_centavos = 350000
+   where clinica_id = c and pessoa_id = (select id from public.pessoas where clinica_id = c and nome = 'Ana Costa');
+
   -- 14 e 15. Pacientes antigos sem atendimento há meses (público de campanhas de reativação)
   insert into public.pessoas (clinica_id, tipo_cadastro, nome, whatsapp_e164, origem_id, ultimo_atendimento_informado,
                               consentimento_marketing)

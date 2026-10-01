@@ -49,7 +49,7 @@ test("nova consulta: paciente cadastrado, procedimento, data, horário, profissi
   await j.getByLabel("Paciente").fill("beat");
   await j.getByRole("list", { name: "Pacientes encontrados" }).getByRole("button", { name: /Beatriz Almeida/ }).click();
   await expect(j.getByText("Beatriz Almeida")).toBeVisible();
-  await expect(j.getByLabel("Procedimento")).toHaveValue(/.+/); // interesse já preenchido
+  await expect(j.getByLabel("Procedimento", { exact: true })).toHaveValue(/.+/); // interesse já preenchido
   await j.getByLabel("Data").fill(diaUtil(6));
   await j.getByLabel("Horário").fill("10:00");
   await expect(j.getByLabel("Dentista")).toHaveValue(/.+/);

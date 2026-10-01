@@ -18,6 +18,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20261002120000_mensagens.sql` | **Mensagens prontas**: variáveis de cada tarefa/paciente (`variaveis_tarefa`, `variaveis_pessoa`), situação da mensagem (pagamentos mudam com o atraso), `sugestoes_mensagem(tarefa)` e `mensagens_para_pessoa(pessoa)`; um modelo padrão por situação e procedimento |
 | `20261003120000_financeiro_simples.sql` | **Financeiro simples**: `registrar_negociacao()` (paciente, procedimento, valor, entrada com data e forma próprias, parcelas, forma, observações), `registrar_pagamento()` (total ou parcial), `mudar_vencimento()`, `quitar_recebidos_na_hora()` (cartão), visões `v_financeiro_parcelas` / `v_financeiro_negociacoes` e `resumo_financeiro(mês)` |
 | `20261004120000_indicadores.sql` | **Indicadores comerciais e de marketing**: `indicadores(clínica, de, até, procedimento)` → leads, conversão, funil, origem (por `origens.canal`), procedimentos, perdas (por `motivos.grupo_perda`) e reativação, sempre por período |
+| `20261005120000_agenda_financeiro.sql` | **Agenda integrada ao financeiro**: `agendamentos.valor_centavos` (informado ao agendar), `registrar_atendimento()` ("Compareceu" + pago agora / vai pagar depois / já registrado / sem cobrança → venda, parcelas e lembretes), `vendas.agendamento_id` e `vendas.procedimento_id`; cobrança de avaliação não fecha a negociação |
 
 ## Motor de ações — regras de follow-up configuráveis
 
@@ -126,6 +127,8 @@ Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, 
 ## Versão de teste
 
 `seed.sql` cria o esquema `teste` — é a presença dele que liga o modo de teste (`public.ambiente_teste()`): faixa "Versão de teste" e o botão *Recomeçar com dados de exemplo* (`teste.recomecar()`, só a administradora: apaga tudo menos os logins e roda `teste.carregar_dados_ficticios()` de novo). `teste.criar_logins_de_teste()` cria (ou troca a senha de) `dona@teste.institutocg.com.br` e `secretaria@teste.institutocg.com.br`, já confirmados.
+
+`versao-teste/atualizar-agenda-financeiro.sql`: para quem instalou a versão de teste antes da migração 13 (agenda + financeiro).
 
 `versao-teste/instalar.sql` = todas as migrações + `seed.sql` + logins, num só arquivo para o SQL Editor (gerado por `scripts/gerar-versao-teste.sh`). O `testar-banco.sh` confere que ele está em dia e o instala num banco com as tabelas de login iguais às do Supabase. Passo a passo: [`docs/VERSAO_DE_TESTE.md`](../docs/VERSAO_DE_TESTE.md).
 

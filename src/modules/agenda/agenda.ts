@@ -36,7 +36,24 @@ export interface Consulta {
   observacoes: string | null;
   remarcado_para: Date | null;
   recuperacao: SituacaoRecuperacao | null;
+  /** Valor do procedimento informado ao agendar (centavos). */
+  valor_centavos: number | null;
+  /** Situação do pagamento registrado ao marcar "Compareceu". */
+  cobranca: SituacaoCobranca | null;
+  /** Negociação já registrada no financeiro (pelo funil ou pelo Financeiro), ex.: "Facetas — R$ 5.000,00 (em aberto R$ 3.000,00)". */
+  negociacao_registrada: string | null;
 }
+
+export type SituacaoCobranca = "pendente" | "parcial" | "pago" | "atrasado";
+export const COBRANCA: Record<SituacaoCobranca, { rotulo: string; classe: string }> = {
+  pago: { rotulo: "Pago", classe: "text-rotina" },
+  pendente: { rotulo: "A receber", classe: "text-dourado-escuro" },
+  parcial: { rotulo: "Parcialmente pago", classe: "text-dourado-escuro" },
+  atrasado: { rotulo: "Pagamento atrasado", classe: "text-urgente" },
+};
+
+/** Como ficou o pagamento ao marcar "Compareceu". */
+export type ComoPagou = "pago" | "a_pagar" | "sem_cobranca" | "ja_registrado";
 
 export interface Recuperacao {
   agendamento_id: string;
