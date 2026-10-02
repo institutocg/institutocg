@@ -8,7 +8,10 @@ import { exigirSessao } from "@/modules/sessao/sessao";
 import type { Retorno } from "../hoje/acoes";
 
 const esquemaFiltro = z.object({
-  segmento: z.enum(["inativos", "procedimento", "nao_fecharam"]),
+  segmento: z.enum([
+    "inativos", "procedimento", "nao_fecharam", "tratamento_pendente", "avaliacao_nao_agendada", "aniversario",
+    "pos_tratamento", "interesse", "desmarcou", "especiais",
+  ]),
   meses: z.coerce.number({ error: "Informe os meses." }).int().min(1, "Meses entre 1 e 120.").max(120, "Meses entre 1 e 120."),
   procedimentoId: z.union([z.literal(""), z.uuid()]),
   somenteMarketing: z.boolean(),
@@ -22,7 +25,7 @@ export async function preverCampanha(filtro: Filtro): Promise<{ ok: true; pessoa
   const lido = esquemaFiltro.safeParse(filtro);
   if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
   const f = lido.data;
-  if (f.segmento === "procedimento" && !f.procedimentoId) return { ok: false, erro: "Escolha o procedimento." };
+  if ((f.segmento === "procedimento" || f.segmento === "interesse") && !f.procedimentoId) return { ok: false, erro: "Escolha o procedimento." };
   try {
     const pessoas = await comoUsuaria(sessao.usuarioId, async (db) => {
       const { rows } = await db.query<Destinatario>(

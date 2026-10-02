@@ -4,7 +4,7 @@ import { Megaphone, Search } from "lucide-react";
 import { useState, useTransition, type ReactNode } from "react";
 import { criarCampanha, encerrarCampanha, preverCampanha } from "@/app/(app)/campanhas/acoes";
 import { avisar } from "@/components/avisos";
-import { SEGMENTOS, terminoPrevisto, type Destinatario, type Segmento } from "@/modules/campanhas/campanhas";
+import { EPOCAS, GRUPOS_SEGMENTO, SEGMENTOS, terminoPrevisto, type Destinatario, type Segmento } from "@/modules/campanhas/campanhas";
 import { exemplo } from "@/modules/regras/regras";
 
 const CAMPO =
@@ -48,8 +48,18 @@ export function NovaCampanha({
     setSegmento(s);
     setMeses(String(SEGMENTOS[s].mesesPadrao));
     setMensagem(SEGMENTOS[s].mensagem);
+    if (SEGMENTOS[s].procedimento === "nao") setProcedimentoId("");
     setLista(null);
   }
+
+  function usarEpoca(id: string) {
+    const e = EPOCAS.find((x) => x.id === id);
+    if (!e) return;
+    trocarSegmento("interesse");
+    setNome(e.nome);
+    setMensagem(e.mensagem);
+  }
+  const def = SEGMENTOS[segmento];
 
   function ver() {
     setErro(null);
@@ -87,39 +97,63 @@ export function NovaCampanha({
         <Megaphone className="size-5 text-dourado" /> Nova campanha
       </h2>
 
-      <fieldset className="mt-4">
-        <legend className="text-sm text-suave">Para quem?</legend>
-        <div role="radiogroup" className="mt-2 grid gap-2 sm:grid-cols-3">
-          {(Object.keys(SEGMENTOS) as Segmento[]).map((s) => (
+      {GRUPOS_SEGMENTO.map((g) => (
+        <fieldset key={g.id} className="mt-4">
+          <legend className="text-sm font-medium">{g.titulo}</legend>
+          <p className="text-xs text-sutil">{g.ajuda}</p>
+          <div role="radiogroup" aria-label={g.titulo} className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {(Object.keys(SEGMENTOS) as Segmento[])
+              .filter((s) => SEGMENTOS[s].grupo === g.id)
+              .map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={segmento === s}
+                  onClick={() => trocarSegmento(s)}
+                  className={`rounded-lg border px-3.5 py-2.5 text-left text-sm transition ${
+                    segmento === s ? "border-dourado bg-dourado-claro" : "border-borda-forte hover:border-dourado"
+                  }`}
+                >
+                  <span className="block font-medium">{SEGMENTOS[s].rotulo}</span>
+                  <span className="block text-xs text-sutil">{SEGMENTOS[s].ajuda}</span>
+                </button>
+              ))}
+          </div>
+        </fieldset>
+      ))}
+
+      <div className="mt-4 rounded-lg bg-fundo px-3.5 py-3">
+        <p className="text-sm font-medium">Campanhas de época</p>
+        <p className="text-xs text-sutil">Atalhos que preenchem nome e mensagem para quem se interessou por um procedimento. Depois, escolha o procedimento.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {EPOCAS.map((e) => (
             <button
-              key={s}
+              key={e.id}
               type="button"
-              role="radio"
-              aria-checked={segmento === s}
-              onClick={() => trocarSegmento(s)}
-              className={`rounded-lg border px-3.5 py-2.5 text-left text-sm transition ${
-                segmento === s ? "border-dourado bg-dourado-claro" : "border-borda-forte hover:border-dourado"
-              }`}
+              onClick={() => usarEpoca(e.id)}
+              className="rounded-full border border-borda-forte bg-superficie px-3 py-1 text-sm hover:border-dourado"
             >
-              <span className="block font-medium">{SEGMENTOS[s].rotulo}</span>
-              <span className="block text-xs text-sutil">{SEGMENTOS[s].ajuda}</span>
+              {e.nome} <span className="text-xs text-sutil">· {e.quando}</span>
             </button>
           ))}
         </div>
-      </fieldset>
+      </div>
 
       <div className="grid gap-x-3 sm:grid-cols-3">
-        <Campo rotulo={segmento === "nao_fecharam" ? "Encerradas há mais de (meses)" : segmento === "procedimento" ? "Feito há mais de (meses)" : "Sem atendimento há mais de (meses)"}>
-          <input type="number" min={1} max={120} value={meses} onChange={(e) => { setMeses(e.target.value); setLista(null); }} className={CAMPO} />
-        </Campo>
-        <Campo rotulo={segmento === "procedimento" ? "Procedimento" : "Procedimento (opcional)"}>
+        {def.rotuloMeses && (
+          <Campo rotulo={def.rotuloMeses}>
+            <input type="number" min={1} max={120} value={meses} onChange={(e) => { setMeses(e.target.value); setLista(null); }} className={CAMPO} />
+          </Campo>
+        )}
+        <Campo rotulo={def.procedimento === "obrigatorio" ? "Procedimento" : "Procedimento (opcional)"}>
           <select
             value={procedimentoId}
             onChange={(e) => { setProcedimentoId(e.target.value); setLista(null); }}
-            disabled={segmento === "inativos"}
+            disabled={def.procedimento === "nao"}
             className={CAMPO}
           >
-            <option value="">{segmento === "inativos" ? "Todos" : "Escolha…"}</option>
+            <option value="">{def.procedimento === "nao" ? "Todos" : def.procedimento === "opcional" ? "Todos" : "Escolha…"}</option>
             {procedimentos.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nome}
@@ -151,7 +185,9 @@ export function NovaCampanha({
         <div className="mt-5">
           <p className="text-sm font-medium" aria-live="polite">
             {lista.length === 0
-              ? "Ninguém se encaixa agora (quem não aceita contato, já está negociando ou participou de campanha nos últimos 30 dias fica de fora)."
+              ? segmento === "aniversario"
+                ? "Ninguém faz aniversário neste período (ou o parabéns já está programado)."
+                : "Ninguém se encaixa agora (quem não aceita contato, já está negociando ou participou de campanha nos últimos 30 dias fica de fora)."
               : `${selecionadas.length} de ${lista.length} ${lista.length === 1 ? "pessoa selecionada" : "pessoas selecionadas"}`}
           </p>
           {lista.length > 0 && (
@@ -187,13 +223,19 @@ export function NovaCampanha({
           <Campo rotulo="Nome da campanha">
             <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} placeholder="Ex.: Revisão de fim de ano" className={CAMPO} />
           </Campo>
-          <Campo rotulo="Mensagem sugerida" ajuda="Use {{nome}} e {{procedimento}}. Cada mensagem é revisada e enviada por você.">
+          <Campo
+            rotulo="Mensagem sugerida"
+            ajuda="Use {{nome}} e {{procedimento}}. Cada mensagem é revisada e enviada por você. Evite preço, desconto ou promoção (publicidade odontológica)."
+          >
             <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={4} maxLength={2000} className={CAMPO} />
           </Campo>
           <p className="mt-2 rounded-lg bg-fundo px-3.5 py-2.5 text-sm text-suave">
             <span className="text-xs tracking-wide text-sutil uppercase">Prévia · </span>
             {exemplo(mensagem, procNome)}
           </p>
+          {segmento === "aniversario" ? (
+            <p className="mt-3 text-sm text-suave">Cada parabéns fica para o dia do aniversário (ou o dia útil anterior, se cair no fim de semana).</p>
+          ) : (
           <div className="grid gap-x-3 sm:grid-cols-2">
             <Campo rotulo="Contatos por dia (no máximo)" ajuda="Um ritmo tranquilo permite conversas de verdade.">
               <input type="number" min={1} max={50} value={limiteDia} onChange={(e) => setLimiteDia(e.target.value)} className={CAMPO} />
@@ -202,7 +244,8 @@ export function NovaCampanha({
               <input type="date" min={hoje} value={iniciaEm} onChange={(e) => setIniciaEm(e.target.value)} className={CAMPO} />
             </Campo>
           </div>
-          {fim && selecionadas.length > 0 && (
+          )}
+          {fim && selecionadas.length > 0 && segmento !== "aniversario" && (
             <p className="mt-3 text-sm text-suave">
               {selecionadas.length} {selecionadas.length === 1 ? "contato" : "contatos"} de {br(iniciaEm)} até cerca de {br(fim)} (só dias úteis).
             </p>

@@ -1092,6 +1092,15 @@ Ajustes pedidos depois do primeiro uso — sem recriar o prontuário:
 
 Fluxo: paciente → agendamento → compareceu → prontuário → consulta → procedimentos/plano → total → pagamento → pendências.
 
+## 14.12 Mais campanhas (implementado)
+
+Na tela **Campanhas**, os tipos aparecem em dois grupos:
+
+- **Trazer de volta** (abrem a negociação em "Reativação"): pacientes sem atendimento, quem fez um procedimento, quem não fechou, **avaliação que não aconteceu** (interesse encerrado sem nenhuma consulta), **quem se interessou por um procedimento** (para campanhas de época) e **desmarcou e não remarcou**.
+- **Relacionamento e cuidado** (só criam o contato do dia com a mensagem, sem mexer no funil): **tratamento pendente** (procedimentos pendentes no plano do prontuário e nenhuma consulta marcada), **aniversário** (parabéns no dia ou no dia útil anterior, sem oferta; não conta como insistência), **avaliação no Google e indicação** (1 a 3 meses depois do tratamento, uma vez por paciente) e **pacientes especiais** (30% com maior histórico).
+- **Campanhas de época**: atalhos "Sorriso para as festas", "Noivas e formaturas" e "Começo de ano", que preenchem nome e mensagem; escolhe-se o procedimento.
+- Todas as mensagens são sem preço, desconto ou promoção (publicidade odontológica) e continuam respeitando consentimento, intervalo entre contatos, negociações em andamento e pagamentos em atraso.
+
 ## 15. Decisões pendentes
 
 **Decidido:**
