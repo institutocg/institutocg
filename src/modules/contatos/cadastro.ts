@@ -41,7 +41,8 @@ export const esquemaCadastro = z
       z.string().regex(/^[A-Z]{2}$/, "UF com 2 letras (ex.: SP).").optional(),
     ),
     origemId: uuidOpcional,
-    procedimentoId: uuidOpcional,
+    // Procedimento: id de um já cadastrado ou o nome escrito livremente.
+    procedimentoId: opcional(z.string().max(120, "Procedimento: no máximo 120 caracteres.")),
     responsavelId: uuidOpcional,
     observacoes: opcional(z.string().max(1000, "Observações: no máximo 1.000 caracteres.")),
     aceitaMarketing: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
@@ -51,7 +52,7 @@ export const esquemaCadastro = z
       (v) => (v === "" || v === null ? undefined : v),
       z.enum(Object.keys(FAIXAS_ATENDIMENTO) as [FaixaAtendimento, ...FaixaAtendimento[]]).optional(),
     ),
-    tratamentos: z.array(z.uuid()).default([]),
+    tratamentos: z.array(z.string().trim().min(2).max(120)).max(30).default([]),
     emTratamento: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   })
 ;

@@ -212,11 +212,17 @@ export interface ResumoConsulta {
   retorno_em: DataCivil | null;
   realizados: number;
   procedimentos_realizados: string | null;
+  motivo_obs: string | null;
+  queixa: string | null;
+  anamnese_obs: string | null;
 }
 
 /** "Consulta 03 — Facetas — 30/10/2026". */
-export function tituloConsulta(c: Pick<ResumoConsulta, "numero" | "data" | "procedimento" | "motivo" | "tipo">): string {
-  const assunto = c.procedimento ?? c.motivo[0] ?? (c.tipo ? ROTULO_TIPO[c.tipo] : null);
+export function tituloConsulta(
+  c: Pick<ResumoConsulta, "numero" | "data" | "procedimento" | "motivo" | "tipo"> & { motivo_obs?: string | null },
+): string {
+  const motivo = c.motivo_obs && c.motivo_obs.length > 40 ? `${c.motivo_obs.slice(0, 38)}…` : c.motivo_obs;
+  const assunto = c.procedimento ?? motivo ?? c.motivo[0] ?? (c.tipo ? ROTULO_TIPO[c.tipo] : null);
   return [`Consulta ${String(c.numero).padStart(2, "0")}`, assunto, c.data.split("-").reverse().join("/")].filter(Boolean).join(" — ");
 }
 
@@ -228,21 +234,12 @@ const ROTULO_TIPO: Record<string, string> = {
   manutencao: "Manutenção",
 };
 
-/** Dados da ficha enviados ao salvar. */
-const lista = (opcoes: readonly string[]) => z.array(z.string().trim().min(1).max(60)).max(opcoes.length + 10);
+/** Dados da ficha enviados ao salvar: só texto livre + odontograma. */
 export const esquemaFicha = z.object({
   profissional_id: z.union([z.literal(""), z.uuid()]).default(""),
-  motivo: lista(MOTIVOS),
-  motivo_obs: z.string().trim().max(500).default(""),
-  anamnese: lista(ANAMNESE),
-  anamnese_obs: z.string().trim().max(2000).default(""),
-  diagnostico: lista(DIAGNOSTICOS),
-  diagnostico_obs: z.string().trim().max(2000).default(""),
-  evolucao: z.string().trim().max(4000).default(""),
-  orientacoes: lista(ORIENTACOES),
-  orientacoes_obs: z.string().trim().max(1000).default(""),
-  retorno_em: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data de retorno inválida.")]).default(""),
-  retorno_obs: z.string().trim().max(300).default(""),
+  motivo_obs: z.string().trim().max(500, "Motivo: no máximo 500 caracteres.").default(""),
+  queixa: z.string().trim().max(1000, "Queixa: no máximo 1.000 caracteres.").default(""),
+  anamnese_obs: z.string().trim().max(2000, "Anamnese: no máximo 2.000 caracteres.").default(""),
   odontograma: z.record(z.string(), z.unknown()).default({}),
 });
 export type Ficha = z.input<typeof esquemaFicha>;

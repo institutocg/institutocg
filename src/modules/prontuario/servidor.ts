@@ -47,7 +47,7 @@ export async function carregarPaciente(db: Db, pessoaId: string): Promise<Pacien
 export async function carregarConsultas(db: Db, pessoaId: string): Promise<ResumoConsulta[]> {
   const { rows } = await db.query<ResumoConsulta>(
     `select id, numero, data, horario, tipo, procedimento, profissional, profissional_cor, status, motivo, anamnese,
-            diagnostico, retorno_em, realizados, procedimentos_realizados
+            diagnostico, retorno_em, realizados, procedimentos_realizados, motivo_obs, queixa, anamnese_obs
        from public.v_atendimentos where pessoa_id = $1 order by data desc, numero desc`,
     [pessoaId],
   );
@@ -59,8 +59,7 @@ export async function carregarPlano(db: Db, pessoaId: string): Promise<ItemPlano
     `select id, procedimento_id, procedimento, dente, status, valor_centavos, atendimento_numero, realizado_atendimento_id,
             realizado_atendimento_numero, realizado_em, venda_id, financeiro, saldo_centavos, proximo_vencimento
        from public.v_plano_tratamento where pessoa_id = $1
-      order by case status when 'realizado' then 1 when 'cancelado' then 3 when 'nao_realizado' then 2 else 0 end,
-               realizado_em desc nulls last, criado_em`,
+      order by criado_em, id`,
     [pessoaId],
   );
   return rows;
@@ -106,4 +105,34 @@ export async function carregarCatalogo(db: Db, clinicaId: string) {
     [clinicaId],
   );
   return { procedimentos: procedimentos.rows, formas: formas.rows, profissionais: profissionais.rows };
+}
+
+export interface PagamentoDoPlano {
+  planoId: string | null;
+  situacao: {
+    total: number;
+    registrado: number;
+    pago: number;
+    pendente: number;
+    a_registrar: number;
+    atrasado: number;
+    proximo_vencimento: DataCivil | null;
+  } | null;
+  /** Parcelas em aberto do plano (as mesmas do Financeiro). */
+  parcelas: ParcelaFin[];
+}
+
+/** Total, pago e pendente do plano atual do paciente (só para quem vê o financeiro). */
+export async function carregarPagamentoPlano(db: Db, pessoaId: string, podeVerFinanceiro: boolean): Promise<PagamentoDoPlano> {
+  const plano = (await db.query<{ id: string | null }>("select public.plano_atual($1) as id", [pessoaId])).rows[0].id;
+  if (!plano || !podeVerFinanceiro) return { planoId: plano, situacao: null, parcelas: [] };
+  const situacao = (await db.query<{ s: PagamentoDoPlano["situacao"] }>("select public.situacao_plano($1) as s", [plano])).rows[0].s;
+  const parcelas = await db.query<ParcelaFin>(
+    `select * from public.v_financeiro_parcelas
+      where situacao <> 'pago'
+        and (plano_id = $1 or venda_id in (select venda_id from public.orcamento_itens where orcamento_id = $1 and venda_id is not null))
+      order by vencimento`,
+    [plano],
+  );
+  return { planoId: plano, situacao, parcelas: parcelas.rows };
 }

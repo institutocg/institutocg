@@ -4,6 +4,7 @@ import { CircleAlert, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { cloneElement, useActionState, useId, useState, type ReactElement, type ReactNode } from "react";
 import type { EstadoCadastro } from "@/app/(app)/contatos/acoes";
+import { CampoProcedimento } from "@/components/procedimento";
 import { FAIXAS_ATENDIMENTO, type FaixaAtendimento } from "@/modules/contatos/cadastro";
 import type { OpcoesCadastro } from "@/modules/contatos/servidor";
 
@@ -104,14 +105,13 @@ export function FormularioPaciente({
           </Campo>
         )}
         <Campo nome="procedimentoId" rotulo="Procedimento de interesse" erro={erros.procedimentoId}>
-          <select name="procedimentoId" defaultValue={texto(valores.procedimentoId)} className={CAMPO}>
-            <option value="">{antigo ? "Nenhum no momento" : "Ainda não sabe"}</option>
-            {opcoes.procedimentos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
+          <CampoProcedimento
+            name="procedimentoId"
+            defaultValue={opcoes.procedimentos.find((p) => p.id === texto(valores.procedimentoId))?.nome ?? texto(valores.procedimentoId)}
+            sugestoes={opcoes.procedimentos}
+            placeholder={antigo ? "Nenhum no momento" : "Ainda não sabe — ou escreva"}
+            className={CAMPO}
+          />
         </Campo>
         <Campo nome="responsavelId" rotulo="Responsável pelo atendimento">
           <select name="responsavelId" defaultValue={texto(valores.responsavelId) || usuarioId} className={CAMPO}>
@@ -187,6 +187,12 @@ function HistoricoNaClinica({
   const inicialOpcao = valores.ultimoAtendimentoMes ? "mes" : texto(valores.ultimoAtendimentoFaixa) || "mes";
   const [opcao, setOpcao] = useState<string>(inicialOpcao);
   const [tratamentos, setTratamentos] = useState<string[]>(lista(valores.tratamentos));
+  const [outro, setOutro] = useState("");
+  function incluirOutro() {
+    const nome = outro.trim().replace(/\s+/g, " ");
+    if (nome.length >= 2 && !tratamentos.includes(nome)) setTratamentos([...tratamentos, nome]);
+    setOutro("");
+  }
 
   function alternar(id: string) {
     setTratamentos((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
@@ -234,6 +240,36 @@ function HistoricoNaClinica({
               {p.nome}
             </Pilula>
           ))}
+        </div>
+        {tratamentos.filter((t) => !opcoes.procedimentos.some((p) => p.id === t)).length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {tratamentos
+              .filter((t) => !opcoes.procedimentos.some((p) => p.id === t))
+              .map((t) => (
+                <Pilula key={t} ativo onClick={() => alternar(t)} papel="checkbox">
+                  {t}
+                </Pilula>
+              ))}
+          </div>
+        )}
+        <div className="mt-2 flex max-w-md gap-2">
+          <input
+            value={outro}
+            onChange={(e) => setOutro(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                incluirOutro();
+              }
+            }}
+            maxLength={120}
+            aria-label="Outro tratamento"
+            placeholder="Outro tratamento (escreva)"
+            className={CAMPO}
+          />
+          <button type="button" onClick={incluirOutro} className="shrink-0 rounded-lg border border-borda-forte px-3 text-sm hover:border-dourado">
+            Incluir
+          </button>
         </div>
         {tratamentos.map((id) => (
           <input key={id} type="hidden" name="tratamentos" value={id} />

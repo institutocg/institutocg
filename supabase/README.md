@@ -20,6 +20,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20261004120000_indicadores.sql` | **Indicadores comerciais e de marketing**: `indicadores(clínica, de, até, procedimento)` → leads, conversão, funil, origem (por `origens.canal`), procedimentos, perdas (por `motivos.grupo_perda`) e reativação, sempre por período |
 | `20261005120000_agenda_financeiro.sql` | **Agenda integrada ao financeiro**: `agendamentos.valor_centavos` (informado ao agendar), `registrar_atendimento()` ("Compareceu" + pago agora / vai pagar depois / já registrado / sem cobrança → venda, parcelas e lembretes), `vendas.agendamento_id` e `vendas.procedimento_id`; cobrança de avaliação não fecha a negociação |
 | `20261006120000_prontuario.sql` | **Prontuário**: `prontuarios` (um por paciente, automático), `atendimentos` (consultas numeradas, ficha e odontograma por consulta, travadas ao finalizar), plano de tratamento = `orcamentos.origem = 'prontuario'` + status por item (`orcamento_itens.status`), `realizar_item()` (cobrança no Financeiro existente), `abrir_atendimento()` (agenda → ficha), `pode_ver_prontuario()` |
+| `20261007120000_prontuario_simples.sql` | **Prontuário simplificado**: `procedimento_por_nome()` (procedimento livre em todo o sistema), `atendimentos.queixa`, `salvar_atendimento()` só altera o que vier, `marcar_feito()` / `adicionar_procedimento_plano()` / `remover_item_plano()`, pagamento do plano (`vendas.plano_id`, `situacao_plano()`, `registrar_pagamento_plano()`) |
 
 ## Motor de ações — regras de follow-up configuráveis
 
@@ -135,6 +136,8 @@ Os testes (`tests/10_integridade.sql`, `15_motor_de_acoes.sql`, `17_funil.sql`, 
 ## Versão de teste
 
 `seed.sql` cria o esquema `teste` — é a presença dele que liga o modo de teste (`public.ambiente_teste()`): faixa "Versão de teste" e o botão *Recomeçar com dados de exemplo* (`teste.recomecar()`, só a administradora: apaga tudo menos os logins e roda `teste.carregar_dados_ficticios()` de novo). `teste.criar_logins_de_teste()` cria (ou troca a senha de) `dona@teste.institutocg.com.br` e `secretaria@teste.institutocg.com.br`, já confirmados.
+
+`versao-teste/atualizar-prontuario-simples.sql`: para quem já tinha o prontuário (migração 15).
 
 `versao-teste/atualizar-prontuario.sql`: para quem instalou a versão de teste antes da migração 14 (prontuário).
 

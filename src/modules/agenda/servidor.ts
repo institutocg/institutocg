@@ -14,11 +14,6 @@ export interface DentistaAgenda extends Opcao {
   cor: string;
 }
 
-export interface FormaAgenda extends Opcao {
-  max_parcelas: number;
-  recebe_na_hora: boolean;
-}
-
 export interface DadosAgenda {
   hoje: DataCivil;
   consultas: Consulta[];
@@ -27,7 +22,6 @@ export interface DadosAgenda {
   profissionais: DentistaAgenda[];
   procedimentos: Opcao[];
   motivos: Opcao[];
-  formas: FormaAgenda[];
 }
 
 // Uma consulta de cada vez: a conexão (transação) é compartilhada.
@@ -35,8 +29,7 @@ export async function carregarAgenda(db: Db, clinicaId: string, segunda: DataCiv
   const hoje = (await db.query<{ hoje: string }>("select public.hoje_clinica($1) as hoje", [clinicaId])).rows[0].hoje;
   const consultas = await db.query<Consulta>(
     `select id, pessoa_id, pessoa_nome, whatsapp, tipo, status, dia, horario, duracao_min, procedimento_id, procedimento,
-            profissional_id, profissional, profissional_cor, motivo, observacoes, remarcado_para, recuperacao,
-            valor_centavos, cobranca, negociacao_registrada
+            profissional_id, profissional, profissional_cor, motivo, observacoes, remarcado_para, recuperacao
        from public.v_agenda
       where clinica_id = $1 and dia between $2::date and $3::date
       order by dia, horario, pessoa_nome`,
@@ -70,10 +63,6 @@ export async function carregarAgenda(db: Db, clinicaId: string, segunda: DataCiv
     "select id, nome from public.motivos where clinica_id = $1 and aplica_a = 'desmarcou' and ativo order by ordem",
     [clinicaId],
   );
-  const formas = await db.query<FormaAgenda>(
-    "select id, nome, max_parcelas, recebe_na_hora from public.formas_pagamento where clinica_id = $1 and ativo order by ordem",
-    [clinicaId],
-  );
   return {
     hoje,
     consultas: consultas.rows,
@@ -82,7 +71,6 @@ export async function carregarAgenda(db: Db, clinicaId: string, segunda: DataCiv
     profissionais: profissionais.rows,
     procedimentos: procedimentos.rows,
     motivos: motivos.rows,
-    formas: formas.rows,
   };
 }
 

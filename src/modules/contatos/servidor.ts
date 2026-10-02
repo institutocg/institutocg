@@ -1,4 +1,5 @@
 import "server-only";
+import { resolverProcedimento } from "@/modules/procedimentos/servidor";
 import type { PoolClient } from "pg";
 import type { Sessao } from "@/modules/sessao/sessao";
 import type { TarefaAberta } from "@/modules/painel/painel";
@@ -77,6 +78,7 @@ async function origemPacienteAntigo(db: Db, clinicaId: string): Promise<string |
  *    houver interesse, abre a negociação em "Em contato".
  */
 export async function cadastrar(db: Db, sessao: Sessao, d: DadosCadastro): Promise<string> {
+  d = await resolverProcedimentos(db, sessao.clinicaId, d);
   const hoje = await hojeDa(db, sessao.clinicaId);
   const antigo = d.tipo === "paciente_antigo";
   const ultimo = antigo ? ultimoAtendimento(d.ultimoAtendimentoMes, d.ultimoAtendimentoFaixa, hoje) : null;
@@ -113,6 +115,17 @@ export async function cadastrar(db: Db, sessao: Sessao, d: DadosCadastro): Promi
   return pessoaId;
 }
 
+/** Procedimento e tratamentos escritos livremente viram ids (acha ou cria no catálogo). */
+async function resolverProcedimentos(db: Db, clinicaId: string, d: DadosCadastro): Promise<DadosCadastro> {
+  const procedimentoId = (await resolverProcedimento(db, clinicaId, d.procedimentoId)) ?? undefined;
+  const tratamentos: string[] = [];
+  for (const t of d.tratamentos) {
+    const id = await resolverProcedimento(db, clinicaId, t);
+    if (id && !tratamentos.includes(id)) tratamentos.push(id);
+  }
+  return { ...d, procedimentoId, tratamentos };
+}
+
 export async function abrirNegociacao(
   db: Db,
   clinicaId: string,
@@ -133,6 +146,7 @@ export async function abrirNegociacao(
 
 /** Atualiza os dados cadastrais (o tipo de cadastro não muda aqui). */
 export async function atualizar(db: Db, sessao: Sessao, pessoaId: string, d: DadosCadastro): Promise<void> {
+  d = await resolverProcedimentos(db, sessao.clinicaId, d);
   const hoje = await hojeDa(db, sessao.clinicaId);
   const antigo = d.tipo === "paciente_antigo";
   const ultimo = antigo ? ultimoAtendimento(d.ultimoAtendimentoMes, d.ultimoAtendimentoFaixa, hoje) : null;

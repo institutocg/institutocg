@@ -54,7 +54,7 @@ reset role; select testes.entrar('dra@pront.local'); set role authenticated;
 select testes.guardar('c1', public.abrir_atendimento(testes.v('ag1')));
 select testes.ok((select numero = 1 and data = testes.hoje() and horario = time '09:00' and tipo = 'avaliacao'
                          and procedimento_id = testes.proc_p('Clareamento dental') and profissional_id is not null
-                         and motivo = array['Avaliação'] and status = 'em_andamento'
+                         and motivo_obs = 'Clareamento dental' and status = 'em_andamento'
                   from public.atendimentos where id = testes.v('c1')),
   'abrir pelo agendamento cria a consulta com paciente, data, horário, dentista e procedimento/motivo');
 select testes.ok(public.abrir_atendimento(testes.v('ag1')) = testes.v('c1'), 'abrir de novo reabre a mesma consulta');

@@ -8,19 +8,17 @@ import {
   buscarPacientes,
   desmarcarConsulta,
   mudarStatusConsulta,
-  registrarAtendimento,
   remarcarConsulta,
   type PacienteEncontrado,
   type RetornoAgenda,
 } from "@/app/(app)/agenda/acoes";
 import { avisar } from "@/components/avisos";
 import { Dialogo } from "@/components/dialogo";
+import { CampoProcedimento } from "@/components/procedimento";
 import { BotaoAbrirProntuario } from "@/components/prontuario/plano";
-import { formatarMoeda } from "@/lib/moeda";
 import { linkWhatsApp } from "@/lib/telefone";
 import {
   acoesPermitidas,
-  COBRANCA,
   descreverPerda,
   DURACOES,
   intervalo,
@@ -29,14 +27,12 @@ import {
   STATUS,
   TIPOS,
   type AcaoConsulta,
-  type ComoPagou,
   type Consulta,
   type Recuperacao,
   type TipoConsulta,
 } from "@/modules/agenda/agenda";
 
 type Opcao = { id: string; nome: string };
-type Forma = Opcao & { max_parcelas: number; recebe_na_hora: boolean };
 
 const CAMPO =
   "mt-1.5 w-full rounded-lg border border-borda-forte bg-superficie px-3 py-2 text-sm outline-none focus:border-dourado";
@@ -212,14 +208,13 @@ function JanelaNovaConsulta({
   const [whatsapp, setWhatsapp] = useState("");
   const [tipoCadastro, setTipoCadastro] = useState<"novo_contato" | "paciente_antigo">("novo_contato");
   const [tipo, setTipo] = useState<TipoConsulta>("avaliacao");
-  const [procedimentoId, setProcedimentoId] = useState(pacienteInicial?.procedimento_id ?? "");
+  const [procedimento, setProcedimento] = useState(pacienteInicial?.procedimento ?? "");
   const [data, setData] = useState(inicial.data);
   const [horario, setHorario] = useState(inicial.horario);
   const [duracao, setDuracao] = useState("60");
   const [profissionalId, setProfissionalId] = useState(dentistaInicial ?? profissionais[0]?.id ?? "");
   const [status, setStatus] = useState<"agendado" | "confirmado">("agendado");
   const [observacoes, setObservacoes] = useState("");
-  const [valor, setValor] = useState("");
   const [encaixe, setEncaixe] = useState(false);
   const [conflito, setConflito] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -235,7 +230,7 @@ function JanelaNovaConsulta({
   function escolher(p: PacienteEncontrado) {
     setPaciente(p);
     setAchados(null);
-    if (p.procedimento_id) setProcedimentoId(p.procedimento_id);
+    if (p.procedimento) setProcedimento(p.procedimento);
   }
 
   function salvar() {
@@ -247,14 +242,13 @@ function JanelaNovaConsulta({
         whatsapp: novo ? whatsapp : undefined,
         tipoCadastro,
         tipo,
-        procedimentoId,
+        procedimento,
         inicio: `${data}T${horario}`,
         duracao,
         profissionalId,
         status,
         observacoes,
         encaixe,
-        valor,
       });
       if (r.ok) {
         avisar(r.mensagem);
@@ -374,20 +368,10 @@ function JanelaNovaConsulta({
             ))}
           </select>
         </Campo>
-        <Campo rotulo="Procedimento">
-          <select value={procedimentoId} onChange={(e) => setProcedimentoId(e.target.value)} className={CAMPO}>
-            <option value="">Ainda não definido</option>
-            {procedimentos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
+        <Campo rotulo="Procedimento" ajuda="Escreva livremente ou escolha uma sugestão.">
+          <CampoProcedimento value={procedimento} onChange={setProcedimento} sugestoes={procedimentos} placeholder="Ex.: Clareamento" className={CAMPO} />
         </Campo>
       </div>
-      <Campo rotulo="Valor do procedimento (opcional)" ajuda="Fica pronto para registrar o pagamento quando o paciente comparecer.">
-        <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="Ex.: 1.500,00" className={CAMPO} />
-      </Campo>
       <CamposHorario data={data} setData={setData} horario={horario} setHorario={setHorario} duracao={duracao} setDuracao={setDuracao} hoje={hoje} />
       <div className="grid gap-x-3 sm:grid-cols-2">
         <Campo rotulo="Dentista">
@@ -424,8 +408,6 @@ export function CartaoConsulta({
   hoje,
   motivos,
   profissionais,
-  formas,
-  podeVerFinanceiro,
   podeVerProntuario = false,
   mostrarDentista = false,
 }: {
@@ -433,8 +415,6 @@ export function CartaoConsulta({
   hoje: string;
   motivos: Opcao[];
   profissionais: Opcao[];
-  formas: Forma[];
-  podeVerFinanceiro: boolean;
   podeVerProntuario?: boolean;
   mostrarDentista?: boolean;
 }) {
@@ -465,12 +445,6 @@ export function CartaoConsulta({
             {c.profissional}
           </span>
         )}
-        {podeVerFinanceiro && (c.cobranca || (c.valor_centavos && !encerrada)) && (
-          <span className={`mt-0.5 block text-[11px] font-medium ${c.cobranca ? COBRANCA[c.cobranca].classe : "text-suave"}`}>
-            {c.valor_centavos ? formatarMoeda(c.valor_centavos) : ""}
-            {c.cobranca ? `${c.valor_centavos ? " · " : ""}${COBRANCA[c.cobranca].rotulo}` : ""}
-          </span>
-        )}
         {perdida && c.recuperacao && (
           <span
             className={`mt-1 inline-block text-[11px] font-medium ${
@@ -487,8 +461,6 @@ export function CartaoConsulta({
           hoje={hoje}
           motivos={motivos}
           profissionais={profissionais}
-          formas={formas}
-          podeVerFinanceiro={podeVerFinanceiro}
           podeVerProntuario={podeVerProntuario}
           aoFechar={() => setAberto(false)}
         />
@@ -511,8 +483,6 @@ function JanelaConsulta({
   hoje,
   motivos,
   profissionais,
-  formas,
-  podeVerFinanceiro,
   podeVerProntuario,
   aoFechar,
 }: {
@@ -520,14 +490,12 @@ function JanelaConsulta({
   hoje: string;
   motivos: Opcao[];
   profissionais: Opcao[];
-  formas: Forma[];
-  podeVerFinanceiro: boolean;
   podeVerProntuario: boolean;
   aoFechar: () => void;
 }) {
-  const [acao, setAcao] = useState<AcaoConsulta | "pagamento" | null>(null);
-  // Sem cobrança registrada para quem já compareceu: dá para registrar depois.
-  const semPagamento = podeVerFinanceiro && c.status === "compareceu" && !c.cobranca;
+  const [acao, setAcao] = useState<AcaoConsulta | null>(null);
+  // Compareceu: no mesmo lugar, o caminho para o prontuário.
+  const [compareceu, setCompareceu] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
   const acoes = acoesPermitidas(c, hoje);
@@ -539,7 +507,8 @@ function JanelaConsulta({
       const r = await mudarStatusConsulta({ agendamentoId: c.id, status });
       if (r.ok) {
         avisar(r.mensagem);
-        aoFechar();
+        if (status === "compareceu" && podeVerProntuario) setCompareceu(true);
+        else aoFechar();
       } else setErro(r.erro);
     });
   }
@@ -561,15 +530,6 @@ function JanelaConsulta({
           <dt className="text-xs text-sutil">Dentista</dt>
           <dd>{c.profissional ?? "—"}</dd>
         </div>
-        {podeVerFinanceiro && (c.valor_centavos || c.cobranca) && (
-          <div>
-            <dt className="text-xs text-sutil">Valor</dt>
-            <dd>
-              {c.valor_centavos ? formatarMoeda(c.valor_centavos) : "—"}
-              {c.cobranca && <span className={`ml-1.5 text-xs font-medium ${COBRANCA[c.cobranca].classe}`}>{COBRANCA[c.cobranca].rotulo}</span>}
-            </dd>
-          </div>
-        )}
         {c.motivo && (
           <div>
             <dt className="text-xs text-sutil">Motivo</dt>
@@ -586,7 +546,7 @@ function JanelaConsulta({
 
       {!acao && (
         <>
-          {acoes.length > 0 ? (
+          {acoes.length > 0 && !compareceu ? (
             <div className="mt-5 grid grid-cols-2 gap-2">
               {acoes.map((a) => (
                 <button
@@ -597,9 +557,7 @@ function JanelaConsulta({
                     a === "confirmar"
                       ? direto("confirmado")
                       : a === "compareceu"
-                        ? podeVerFinanceiro
-                          ? setAcao("compareceu")
-                          : direto("compareceu")
+                        ? direto("compareceu")
                         : a === "faltou"
                           ? direto("faltou")
                           : setAcao(a)
@@ -614,23 +572,23 @@ function JanelaConsulta({
                 </button>
               ))}
             </div>
-          ) : semPagamento ? null : (
+          ) : compareceu || (c.status === "compareceu" && podeVerProntuario) ? null : (
             <p className="mt-5 text-sm text-sutil">Nenhuma ação disponível para esta consulta.</p>
           )}
-          {semPagamento && (
-            <button
-              type="button"
-              onClick={() => setAcao("pagamento")}
-              className="mt-5 w-full rounded-lg border border-borda-forte px-3 py-2 text-sm font-medium hover:border-dourado"
-            >
-              Registrar pagamento
-            </button>
+          {(compareceu || c.status === "compareceu") && podeVerProntuario && (
+            <div className="mt-5 rounded-xl border border-dourado/50 bg-dourado-claro/50 p-4">
+              <p className="text-sm">{compareceu ? "Comparecimento registrado. " : ""}Registre a consulta no prontuário.</p>
+              <BotaoAbrirProntuario
+                agendamentoId={c.id}
+                classe="mt-3 w-full rounded-lg bg-grafite px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+              />
+            </div>
           )}
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <Link href={`/contatos/${c.pessoa_id}`} className="inline-flex items-center gap-1 text-dourado-escuro underline">
               <UserRound className="size-4" /> Abrir paciente
             </Link>
-            {podeVerProntuario && c.status !== "remarcado" && c.status !== "desmarcado" && c.status !== "cancelado_clinica" && (
+            {podeVerProntuario && !compareceu && !["remarcado", "desmarcado", "cancelado_clinica", "compareceu"].includes(c.status) && (
               <BotaoAbrirProntuario
                 agendamentoId={c.id}
                 classe="inline-flex items-center gap-1 text-dourado-escuro underline disabled:opacity-50"
@@ -641,9 +599,6 @@ function JanelaConsulta({
         </>
       )}
 
-      {(acao === "compareceu" || acao === "pagamento") && (
-        <FormCompareceu c={c} formas={formas} hoje={hoje} soPagamento={acao === "pagamento"} aoVoltar={() => setAcao(null)} aoConcluir={aoFechar} />
-      )}
       {acao === "desmarcar" && <FormDesmarcar c={c} motivos={motivos} aoVoltar={() => setAcao(null)} aoConcluir={aoFechar} />}
       {acao === "remarcar" && (
         <FormRemarcar
@@ -658,127 +613,6 @@ function JanelaConsulta({
       )}
       {acao === "cancelar" && <FormCancelar c={c} aoVoltar={() => setAcao(null)} aoConcluir={aoFechar} />}
     </Dialogo>
-  );
-}
-
-const OPCOES_PAGAMENTO: { id: ComoPagou; rotulo: string; ajuda: string }[] = [
-  { id: "pago", rotulo: "Pagou agora", ajuda: "Entra no Financeiro como pago." },
-  { id: "a_pagar", rotulo: "Vai pagar depois", ajuda: "Data prevista e parcelas: o sistema lembra no dia e avisa se atrasar." },
-  { id: "ja_registrado", rotulo: "Já está no Financeiro", ajuda: "O pagamento foi registrado antes (ao fechar no funil, por exemplo)." },
-  { id: "sem_cobranca", rotulo: "Sem cobrança", ajuda: "Avaliação gratuita, cortesia, retorno incluso…" },
-];
-
-/** "Compareceu": registra a presença e, no mesmo passo, como ficou o pagamento. */
-function FormCompareceu({
-  c,
-  formas,
-  hoje,
-  soPagamento,
-  aoVoltar,
-  aoConcluir,
-}: {
-  c: Consulta;
-  formas: Forma[];
-  hoje: string;
-  soPagamento: boolean;
-  aoVoltar: () => void;
-  aoConcluir: () => void;
-}) {
-  const [como, setComo] = useState<ComoPagou>(c.negociacao_registrada ? "ja_registrado" : "pago");
-  const [valor, setValor] = useState(c.valor_centavos ? formatarMoeda(c.valor_centavos).replace("R$ ", "") : "");
-  const [formaId, setFormaId] = useState("");
-  const [vencimento, setVencimento] = useState("");
-  const [parcelas, setParcelas] = useState("1");
-  const [observacao, setObservacao] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
-  const [pendente, iniciar] = useTransition();
-  const forma = formas.find((f) => f.id === formaId);
-  const cobra = como === "pago" || como === "a_pagar";
-  const opcoes = OPCOES_PAGAMENTO.filter((o) => o.id !== "ja_registrado" || c.negociacao_registrada);
-  const podeParcelar = forma ? forma.max_parcelas > 1 && (como === "a_pagar" || forma.recebe_na_hora) : como === "a_pagar";
-
-  function salvar() {
-    setErro(null);
-    iniciar(async () => {
-      const r = await registrarAtendimento({
-        agendamentoId: c.id,
-        como,
-        valor,
-        formaId,
-        vencimento,
-        parcelas: podeParcelar ? parcelas : "1",
-        observacao,
-      });
-      if (r.ok) {
-        avisar(r.mensagem);
-        aoConcluir();
-      } else setErro(r.erro);
-    });
-  }
-
-  return (
-    <div className="mt-5 border-t border-borda pt-4">
-      <p className="text-sm font-medium">{soPagamento ? "Registrar pagamento" : "Compareceu — como ficou o pagamento?"}</p>
-      {c.negociacao_registrada && (
-        <p className="mt-2 rounded-lg bg-fundo px-3 py-2 text-xs text-suave">
-          Já registrado no Financeiro: <strong className="text-grafite">{c.negociacao_registrada}</strong>
-        </p>
-      )}
-      <div role="radiogroup" aria-label="Pagamento" className="mt-3 grid gap-2 sm:grid-cols-2">
-        {opcoes.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={como === o.id}
-            onClick={() => setComo(o.id)}
-            className={`rounded-lg border px-3 py-2 text-left text-sm ${como === o.id ? "border-dourado bg-dourado-claro" : "border-borda-forte hover:border-dourado"}`}
-          >
-            <span className="font-medium">{o.rotulo}</span>
-            <span className="block text-xs text-sutil">{o.ajuda}</span>
-          </button>
-        ))}
-      </div>
-
-      {cobra && (
-        <>
-          <div className="grid gap-x-3 sm:grid-cols-2">
-            <Campo rotulo="Valor">
-              <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="Ex.: 1.500,00" className={CAMPO} />
-            </Campo>
-            <Campo rotulo="Forma de pagamento">
-              <select value={formaId} onChange={(e) => setFormaId(e.target.value)} className={CAMPO}>
-                <option value="">Escolha…</option>
-                {formas.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.nome}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-          </div>
-          {forma?.recebe_na_hora ? (
-            <p className="mt-2 text-xs text-sutil">Cartão é recebido na hora: entra como pago, sem lembretes.</p>
-          ) : (
-            como === "a_pagar" && (
-              <Campo rotulo={Number(parcelas) > 1 ? "Data prevista do 1º pagamento" : "Data prevista do pagamento"} ajuda="No dia, o lembrete aparece no painel; se passar, vira pagamento atrasado.">
-                <input type="date" min={hoje} value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={CAMPO} />
-              </Campo>
-            )
-          )}
-          {podeParcelar && (
-            <Campo rotulo="Parcelas" ajuda={Number(parcelas) > 1 && !forma?.recebe_na_hora ? "Uma por mês, a partir da data prevista." : undefined}>
-              <input type="number" min={1} max={forma?.max_parcelas ?? 60} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={CAMPO} />
-            </Campo>
-          )}
-          <Campo rotulo="Observação (opcional)">
-            <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={300} className={CAMPO} />
-          </Campo>
-        </>
-      )}
-      <Erro texto={erro} />
-      <Rodape aoFechar={aoVoltar} pendente={pendente} rotulo={soPagamento ? "Registrar pagamento" : "Registrar presença"} onClick={salvar} />
-    </div>
   );
 }
 

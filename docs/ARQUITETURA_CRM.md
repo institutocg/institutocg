@@ -1080,6 +1080,18 @@ Módulo clínico integrado ao CRM — mesma identidade visual, organização ins
 - **Visão geral**: paciente (idade, alertas de saúde da última anamnese), última e próxima consulta, histórico, plano, realizados, pendentes, situação financeira (com *Marcar como pago*) e odontograma.
 - **Acesso (LGPD — dado de saúde)**: administradora e dentistas; outras pessoas só com `membros.pode_ver_prontuario`. A secretária continua vendo agenda e financeiro, mas não a ficha clínica.
 
+## 14.11 Prontuário simplificado e procedimento livre (implementado)
+
+Ajustes pedidos depois do primeiro uso — sem recriar o prontuário:
+
+- **Consulta só com o essencial**: motivo da consulta, queixa principal e anamnese/observações em **texto livre**, odontograma e procedimentos. (As listas de seleção, evolução, orientações e retorno saíram da tela; os dados antigos continuam guardados.)
+- **Procedimento sempre digitável em todo o sistema** (agenda, cadastro, abrir negociação, financeiro, prontuário): a lista cadastrada aparece como sugestão, mas qualquer texto é aceito. `procedimento_por_nome()` acha o existente (sem acento/maiúsculas) ou cria no catálogo, então relatórios e filtros continuam funcionando. Filtros (funil, indicadores, financeiro, campanhas) seguem como listas.
+- **Plano de tratamento / orçamento**: procedimento + valor, quantos quiser, com **TOTAL** automático. Ao lado de cada um, **"Feito hoje"**; o que não for feito fica **pendente** e aparece nas próximas consultas para marcar.
+- **Pagamento ≠ realização**: o pagamento é do **plano**, não do procedimento (`vendas.plano_id`). Área **Total / Pago / Pendente** e *Registrar pagamento*: pago integralmente, parcialmente pago (valor pago, data do pagamento, valor restante, data prevista e parcelas) ou não pago (data prevista e parcelas). Usa o Financeiro existente; o restante vira lembrete nas **pendências de hoje** ("Pagamento previsto" no dia, "Pagamento atrasado — vencido há N dias" depois).
+- **Agenda sem financeiro**: paciente, data, horário, dentista e procedimento; status (confirmou, compareceu, desmarcou, faltou…) com as ações de recuperação de sempre. Ao marcar **Compareceu**, aparece **Abrir prontuário**.
+
+Fluxo: paciente → agendamento → compareceu → prontuário → consulta → procedimentos/plano → total → pagamento → pendências.
+
 ## 15. Decisões pendentes
 
 **Decidido:**

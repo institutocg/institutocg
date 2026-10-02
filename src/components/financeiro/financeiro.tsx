@@ -8,6 +8,7 @@ import { buscarPacientes, type PacienteEncontrado } from "@/app/(app)/agenda/aco
 import { registrarNegociacao, type FormaPagamento } from "@/app/(app)/financeiro/acoes";
 import { avisar } from "@/components/avisos";
 import { Dialogo } from "@/components/dialogo";
+import { CampoProcedimento } from "@/components/procedimento";
 import { JanelaNovaData, JanelaPagamento } from "@/components/financeiro/pagamento";
 import { formatarMoeda, paraCentavos } from "@/lib/moeda";
 import { rotuloParcela, rotuloVencimento, simularParcelas, SITUACAO, type ParcelaFin } from "@/modules/financeiro/financeiro";
@@ -140,7 +141,7 @@ function JanelaNegociacao({
   const [paciente, setPaciente] = useState<PacienteEncontrado | null>(pacienteInicial);
   const [busca, setBusca] = useState("");
   const [achados, setAchados] = useState<PacienteEncontrado[]>([]);
-  const [procedimentoId, setProcedimentoId] = useState(pacienteInicial?.procedimento_id ?? "");
+  const [procedimento, setProcedimento] = useState(pacienteInicial?.procedimento ?? "");
   const [valor, setValor] = useState("");
   const [desconto, setDesconto] = useState("");
   const [entrada, setEntrada] = useState("");
@@ -174,7 +175,7 @@ function JanelaNegociacao({
     iniciar(async () => {
       const r = await registrarNegociacao({
         pessoaId: paciente.id,
-        procedimentoId,
+        procedimento,
         valorCentavos: total,
         descontoCentavos: desc,
         entradaCentavos: entr,
@@ -217,7 +218,7 @@ function JanelaNegociacao({
                     type="button"
                     onClick={() => {
                       setPaciente(p);
-                      if (p.procedimento_id) setProcedimentoId(p.procedimento_id);
+                      if (p.procedimento) setProcedimento(p.procedimento);
                     }}
                     className="w-full px-3.5 py-2 text-left text-sm hover:bg-fundo"
                   >
@@ -237,14 +238,7 @@ function JanelaNegociacao({
       )}
 
       <Campo rotulo="Procedimento">
-        <select value={procedimentoId} onChange={(e) => setProcedimentoId(e.target.value)} className={CAMPO}>
-          <option value="">Não informado</option>
-          {procedimentos.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </select>
+        <CampoProcedimento value={procedimento} onChange={setProcedimento} sugestoes={procedimentos} placeholder="Não informado — ou escreva" className={CAMPO} />
       </Campo>
       <div className="grid gap-x-3 sm:grid-cols-2">
         <Campo rotulo="Valor">

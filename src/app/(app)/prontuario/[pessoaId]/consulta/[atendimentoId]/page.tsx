@@ -3,10 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { Bloco, FichaConsulta, type FichaInicial } from "@/components/prontuario/ficha";
-import { PlanoTratamento } from "@/components/prontuario/plano";
+import { PagamentoPlano, PlanoTratamento } from "@/components/prontuario/plano";
 import { comoUsuaria } from "@/lib/db";
 import { diferencasOdontograma, normalizarOdontograma, tituloConsulta } from "@/modules/prontuario/prontuario";
-import { carregarCatalogo, carregarPaciente, carregarPlano } from "@/modules/prontuario/servidor";
+import { carregarCatalogo, carregarPaciente, carregarPagamentoPlano, carregarPlano } from "@/modules/prontuario/servidor";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import { SemAcessoProntuario } from "../../../sem-acesso";
 
@@ -25,6 +25,7 @@ interface Linha {
   status: "em_andamento" | "finalizado";
   motivo: string[];
   motivo_obs: string | null;
+  queixa: string | null;
   anamnese: string[];
   anamnese_obs: string | null;
   diagnostico: string[];
@@ -49,7 +50,7 @@ export default async function Consulta({ params }: { params: Promise<{ pessoaId:
     const paciente = await carregarPaciente(db, pessoaId);
     const { rows } = await db.query<Linha>(
       `select a.id, a.numero, a.data, to_char(a.horario, 'HH24:MI') as horario, a.tipo, pr.nome as procedimento,
-              pf.nome as profissional, a.profissional_id, a.agendamento_id, a.status, a.motivo, a.motivo_obs, a.anamnese,
+              pf.nome as profissional, a.profissional_id, a.agendamento_id, a.status, a.motivo, a.motivo_obs, a.queixa, a.anamnese,
               a.anamnese_obs, a.diagnostico, a.diagnostico_obs, a.evolucao, a.orientacoes, a.orientacoes_obs, a.retorno_em,
               a.retorno_obs, a.odontograma, ant.odontograma as anterior_odontograma, ant.numero as anterior_numero
          from public.atendimentos a
@@ -66,7 +67,8 @@ export default async function Consulta({ params }: { params: Promise<{ pessoaId:
     const hoje = (await db.query<{ hoje: string }>("select public.hoje_clinica($1) as hoje", [sessao.clinicaId])).rows[0].hoje;
     const plano = await carregarPlano(db, pessoaId);
     const catalogo = await carregarCatalogo(db, sessao.clinicaId);
-    return { paciente, a: rows[0], hoje, plano, catalogo };
+    const pagamento = await carregarPagamentoPlano(db, pessoaId, sessao.podeVerFinanceiro);
+    return { paciente, a: rows[0], hoje, plano, catalogo, pagamento };
   });
   if (!d) notFound();
 
@@ -77,21 +79,11 @@ export default async function Consulta({ params }: { params: Promise<{ pessoaId:
   const mudancas = anterior ? diferencasOdontograma(anterior, odonto) : [];
   const inicial: FichaInicial = {
     profissional_id: a.profissional_id ?? "",
-    motivo: a.motivo,
     motivo_obs: a.motivo_obs ?? "",
-    anamnese: a.anamnese,
-    anamnese_obs: a.anamnese_obs ?? "",
-    diagnostico: a.diagnostico,
-    diagnostico_obs: a.diagnostico_obs ?? "",
-    evolucao: a.evolucao ?? "",
-    orientacoes: a.orientacoes,
-    orientacoes_obs: a.orientacoes_obs ?? "",
-    retorno_em: a.retorno_em ?? "",
-    retorno_obs: a.retorno_obs ?? "",
+    queixa: a.queixa ?? "",
+    anamnese_obs: [a.anamnese.join(", "), a.anamnese_obs].filter(Boolean).join("\n"),
     odontograma: odonto,
   };
-  const daConsulta = d.plano.filter((i) => i.realizado_atendimento_id === a.id);
-  const aFazer = d.plano.filter((i) => i.status === "orcado" || i.status === "aceito" || i.status === "pendente");
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-8 lg:py-10">
@@ -120,7 +112,6 @@ export default async function Consulta({ params }: { params: Promise<{ pessoaId:
           atendimentoId={a.id}
           inicial={inicial}
           finalizada={finalizada}
-          hoje={d.hoje}
           profissionais={d.catalogo.profissionais}
           odontogramaAnterior={
             anterior
@@ -130,39 +121,17 @@ export default async function Consulta({ params }: { params: Promise<{ pessoaId:
               : null
           }
           plano={
-            <Bloco titulo="Procedimentos" id="procedimentos-consulta">
-              <h3 className="text-xs font-semibold tracking-wide text-sutil uppercase">Realizados nesta consulta</h3>
-              {daConsulta.length === 0 ? (
-                <p className="mt-1 mb-4 text-sm text-sutil">Nenhum ainda. Marque abaixo o que foi feito hoje.</p>
-              ) : (
-                <div className="mt-2 mb-4">
-                  <PlanoTratamento
-                    pessoaId={p.id}
-                    itens={daConsulta}
-                    procedimentos={d.catalogo.procedimentos}
-                    formas={d.catalogo.formas}
-                    podeVerFinanceiro={sessao.podeVerFinanceiro}
-                    editavel={false}
-                  />
-                </div>
+            <>
+              <Bloco titulo="Procedimentos / plano de tratamento" id="procedimentos-consulta">
+                <p className="-mt-1 mb-3 text-xs text-sutil">Marque “Feito hoje” no que foi realizado nesta consulta. O resto fica pendente para as próximas.</p>
+                <PlanoTratamento pessoaId={p.id} itens={d.plano} sugestoes={d.catalogo.procedimentos} atendimentoId={a.id} travado={finalizada} />
+              </Bloco>
+              {sessao.podeVerFinanceiro && (
+                <Bloco titulo="Pagamento" id="pagamento-consulta">
+                  <PagamentoPlano planoId={d.pagamento.planoId} situacao={d.pagamento.situacao} formas={d.catalogo.formas} parcelas={d.pagamento.parcelas} hoje={d.hoje} />
+                </Bloco>
               )}
-              {!finalizada && (
-                <>
-                  <h3 className="text-xs font-semibold tracking-wide text-sutil uppercase">Plano de tratamento (planejados e pendentes)</h3>
-                  <div className="mt-2">
-                    <PlanoTratamento
-                      pessoaId={p.id}
-                      itens={aFazer}
-                      procedimentos={d.catalogo.procedimentos}
-                      formas={d.catalogo.formas}
-                      atendimentoId={a.id}
-                      podeVerFinanceiro={sessao.podeVerFinanceiro}
-                      editavel
-                    />
-                  </div>
-                </>
-              )}
-            </Bloco>
+            </>
           }
         />
       </div>

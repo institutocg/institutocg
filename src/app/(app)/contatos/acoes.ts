@@ -6,6 +6,7 @@ import { z } from "zod";
 import { comoUsuaria, mensagemDeErro } from "@/lib/db";
 import { errosPorCampo, lerFormulario, type ErrosCadastro } from "@/modules/contatos/cadastro";
 import { abrirNegociacao, atualizar, buscarDuplicado, cadastrar } from "@/modules/contatos/servidor";
+import { resolverProcedimento } from "@/modules/procedimentos/servidor";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import type { Retorno } from "../hoje/acoes";
 
@@ -96,10 +97,10 @@ export async function criarResgate(pessoaId: string): Promise<Retorno> {
 }
 
 /** Abre uma negociação para quem não tem nenhuma em andamento. */
-export async function abrirNegociacaoAcao(pessoaId: string, procedimentoId: string | null): Promise<Retorno> {
+export async function abrirNegociacaoAcao(pessoaId: string, procedimento: string | null): Promise<Retorno> {
   const sessao = await exigirSessao();
   if (!z.uuid().safeParse(pessoaId).success) return { ok: false, erro: "Cadastro inválido." };
-  if (procedimentoId && !z.uuid().safeParse(procedimentoId).success) return { ok: false, erro: "Procedimento inválido." };
+  if (procedimento && procedimento.trim().length > 120) return { ok: false, erro: "Procedimento: no máximo 120 caracteres." };
   try {
     await comoUsuaria(sessao.usuarioId, async (db) => {
       const { rows } = await db.query<{ origem_id: string | null; tipo_cadastro: string; responsavel_id: string | null }>(
@@ -107,6 +108,7 @@ export async function abrirNegociacaoAcao(pessoaId: string, procedimentoId: stri
         [pessoaId],
       );
       if (!rows[0]) throw Object.assign(new Error("Cadastro não encontrado."), { code: "P0002" });
+      const procedimentoId = await resolverProcedimento(db, sessao.clinicaId, procedimento);
       await abrirNegociacao(db, sessao.clinicaId, pessoaId, procedimentoId, "em_contato", rows[0].origem_id,
         rows[0].responsavel_id ?? sessao.usuarioId);
     });

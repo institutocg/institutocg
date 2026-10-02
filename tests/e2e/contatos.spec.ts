@@ -39,7 +39,7 @@ test("novo contato: erros de uma vez, depois cadastro completo com tudo automát
   await campo(page, "Endereço").fill("Rua Oscar Freire, 100");
   await campo(page, "Cidade").fill("São Paulo");
   await campo(page, "Como conheceu").selectOption({ label: "Instagram" });
-  await campo(page, "Procedimento de interesse").selectOption({ label: "Facetas de porcelana" });
+  await campo(page, "Procedimento de interesse").fill("Facetas de porcelana");
   await campo(page, "Observações").fill("Casamento em março.");
   await page.getByRole("button", { name: "Salvar" }).click();
 
@@ -123,7 +123,7 @@ test("paciente antigo com interesse e mês lembrado abre negociação", async ({
   await campo(page, "Nome completo").fill("Cláudia Reis");
   await campo(page, "E-mail").fill("claudia@exemplo.com");
   await page.getByLabel("Mês e ano do último atendimento").fill("2025-11");
-  await campo(page, "Procedimento de interesse").selectOption({ label: "Clareamento dental" });
+  await campo(page, "Procedimento de interesse").fill("Clareamento dental");
   await page.getByRole("button", { name: "Salvar e abrir ficha" }).click();
   await expect(page.getByRole("heading", { name: "Cláudia Reis", level: 1 })).toBeVisible();
   await expect(page.getByRole("region", { name: "Funil" }).locator('[aria-current="step"]')).toHaveText("Em contato");
@@ -154,7 +154,7 @@ test("abrir negociação para quem não tem nenhuma em andamento", async ({ page
   await page.getByRole("button", { name: "Salvar e abrir ficha" }).click();
   const proxima = page.getByRole("region", { name: "Próxima ação" });
   await expect(proxima.getByText("Tem interesse em algum tratamento?")).toBeVisible();
-  await proxima.getByLabel("Interesse").selectOption({ label: "Implantes" });
+  await proxima.getByLabel("Interesse").fill("Implantes");
   await proxima.getByRole("button", { name: "Abrir negociação" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Negociação aberta" })).toBeVisible();
   await expect(proxima.getByRole("article")).toContainText("Implantes");

@@ -1,5 +1,6 @@
 "use client";
 
+import { CampoProcedimento } from "@/components/procedimento";
 import { CircleCheck, LifeBuoy, Plus } from "lucide-react";
 import { useState, useTransition } from "react";
 import { abrirNegociacaoAcao, concluirTratamento, criarResgate } from "@/app/(app)/contatos/acoes";
@@ -38,18 +39,13 @@ export function AbrirNegociacao({
     <div className="flex flex-wrap items-end gap-2">
       <label className="min-w-48 flex-1">
         <span className="text-xs text-sutil">Interesse</span>
-        <select
+        <CampoProcedimento
           value={procedimento}
-          onChange={(e) => setProcedimento(e.target.value)}
+          onChange={setProcedimento}
+          sugestoes={procedimentos}
+          placeholder="Ainda não definido — ou escreva"
           className="mt-1 w-full rounded-lg border border-borda-forte bg-superficie px-3 py-2 text-sm outline-none focus:border-dourado"
-        >
-          <option value="">Ainda não definido</option>
-          {procedimentos.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </select>
+        />
       </label>
       <button
         type="button"

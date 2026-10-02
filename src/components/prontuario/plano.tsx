@@ -1,24 +1,34 @@
 "use client";
 
-import { CheckCircle2, Plus } from "lucide-react";
+import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, useTransition } from "react";
+import { useId, useOptimistic, useState, useTransition } from "react";
 import {
   abrirProntuarioDaConsulta,
-  adicionarAoPlano,
-  mudarStatusDoItem,
-  negociacoesDoPaciente,
+  adicionarProcedimento,
+  marcarFeito,
   novaConsulta,
-  realizarProcedimento,
-  type NegociacaoPaciente,
+  registrarPagamentoDoPlano,
+  removerDoPlano,
 } from "@/app/(app)/prontuario/acoes";
 import { avisar } from "@/components/avisos";
 import { Dialogo } from "@/components/dialogo";
-import { formatarMoeda } from "@/lib/moeda";
-import { SITUACAO } from "@/modules/financeiro/financeiro";
-import { ainda_a_fazer, STATUS_ITEM, STATUS_MANUAIS, type ItemPlano, type StatusItem } from "@/modules/prontuario/prontuario";
+import { LinhaParcela } from "@/components/financeiro/financeiro";
+import { CampoProcedimento } from "@/components/procedimento";
+import { formatarMoeda, paraCentavos } from "@/lib/moeda";
+import type { ParcelaFin } from "@/modules/financeiro/financeiro";
+import { ainda_a_fazer, type ItemPlano } from "@/modules/prontuario/prontuario";
 
 export type ProcedimentoPlano = { id: string; nome: string; ticket_medio_centavos: number | null };
+export type SituacaoPlano = {
+  total: number;
+  registrado: number;
+  pago: number;
+  pendente: number;
+  a_registrar: number;
+  atrasado: number;
+  proximo_vencimento: string | null;
+};
 export type FormaPlano = { id: string; nome: string; max_parcelas: number; recebe_na_hora: boolean };
 
 const CAMPO = "mt-1 w-full rounded-lg border border-borda-forte bg-superficie px-3 py-2 text-sm outline-none focus:border-dourado";
@@ -81,293 +91,259 @@ export function BotaoNovaConsulta({ pessoaId }: { pessoaId: string }) {
   );
 }
 
-// ─── Plano de tratamento ─────────────────────────────────────────────────────
+// ─── Plano de tratamento: procedimento livre, valor e "feito hoje" ──────────
 
-function SeloFinanceiro({ i }: { i: ItemPlano }) {
-  if (i.status !== "realizado") return null;
-  if (!i.financeiro) return <span className="text-xs text-sutil">Sem cobrança</span>;
-  const st = SITUACAO[i.financeiro];
-  return (
-    <span className={`text-xs font-medium ${i.financeiro === "atrasado" ? "text-urgente" : i.financeiro === "pago" ? "text-rotina" : "text-dourado-escuro"}`}>
-      Pagamento: {i.financeiro === "pendente" ? "a receber" : st.rotulo.toLowerCase()}
-      {i.financeiro !== "pago" && i.saldo_centavos ? ` · em aberto ${formatarMoeda(i.saldo_centavos)}` : ""}
-      {i.financeiro !== "pago" && i.proximo_vencimento ? ` · próx. ${br(i.proximo_vencimento)}` : ""}
-    </span>
-  );
+function Avisar(r: { ok: true; mensagem: string } | { ok: false; erro: string }) {
+  avisar(r.ok ? r.mensagem : r.erro, r.ok ? "sucesso" : "erro");
 }
 
 /**
- * Lista do plano. No prontuário: status editável. Na consulta (atendimentoId):
- * botão "Realizar" para o que ainda está a fazer.
+ * Lista do plano com total. Na consulta (atendimentoId): caixinha "Feito hoje"
+ * para cada procedimento pendente e para os que entram agora.
  */
 export function PlanoTratamento({
   pessoaId,
   itens,
-  procedimentos,
-  formas,
+  sugestoes,
   atendimentoId,
-  podeVerFinanceiro,
-  editavel,
+  travado = false,
 }: {
   pessoaId: string;
   itens: ItemPlano[];
-  procedimentos: ProcedimentoPlano[];
-  formas: FormaPlano[];
+  sugestoes: ProcedimentoPlano[];
   atendimentoId?: string;
-  podeVerFinanceiro: boolean;
-  editavel: boolean;
+  travado?: boolean;
 }) {
-  const [realizando, setRealizando] = useState<ItemPlano | null>(null);
-  const [, iniciar] = useTransition();
-  const visiveis = itens.filter((i) => i.status !== "cancelado" || !atendimentoId);
+  const [pendente, iniciar] = useTransition();
+  // A caixinha muda na hora; o servidor confirma em seguida.
+  const [otimista, marcar] = useOptimistic<Record<string, boolean>, [string, boolean]>({}, (atual, [id, v]) => ({ ...atual, [id]: v }));
+  const visiveis = itens.filter((i) => i.status !== "cancelado" && i.status !== "nao_realizado");
+  const total = visiveis.reduce((t, i) => t + Number(i.valor_centavos), 0);
+  const naConsulta = Boolean(atendimentoId);
 
   return (
     <div>
       {visiveis.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-borda-forte bg-superficie p-4 text-sm text-sutil">Nenhum procedimento no plano ainda.</p>
+        <p className="rounded-xl border border-dashed border-borda-forte p-4 text-sm text-sutil">Nenhum procedimento ainda. Escreva abaixo.</p>
       ) : (
-        <ul aria-label="Plano de tratamento" className="divide-y divide-borda rounded-xl border border-borda bg-superficie">
+        <ul aria-label="Plano de tratamento" className="divide-y divide-borda rounded-xl border border-borda">
           {visiveis.map((i) => {
-            const st = STATUS_ITEM[i.status];
-            const aFazer = ainda_a_fazer(i.status);
+            const feitoAqui = otimista[i.id] ?? (i.status === "realizado" && i.realizado_atendimento_id === atendimentoId);
+            const feitoAntes = i.status === "realizado" && i.realizado_atendimento_id !== atendimentoId;
+            const aFazer = ainda_a_fazer(i.status) && !feitoAqui;
             return (
-              <li key={i.id} aria-label={`${i.procedimento} — ${formatarMoeda(i.valor_centavos)}`} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-2">
-                    {i.status === "realizado" ? (
-                      <CheckCircle2 className="size-4 text-rotina" aria-hidden />
-                    ) : (
-                      <span className="size-4 rounded border border-borda-forte" aria-hidden />
-                    )}
-                    <span className={`font-medium ${i.status === "cancelado" ? "line-through text-sutil" : ""}`}>{i.procedimento}</span>
-                    <span className="text-sm tabular-nums">— {formatarMoeda(i.valor_centavos)}</span>
-                    {i.dente && <span className="text-xs text-sutil">dente {i.dente}</span>}
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-sutil">
-                    <span className={`rounded-full px-2 py-0.5 font-medium ${st.classe}`}>{st.rotulo}</span>
-                    {i.status === "realizado" && i.realizado_em && (
-                      <span>
-                        na consulta {String(i.realizado_atendimento_numero).padStart(2, "0")} · {br(i.realizado_em)}
-                      </span>
-                    )}
-                    {podeVerFinanceiro && <SeloFinanceiro i={i} />}
-                  </p>
-                </div>
-                {editavel && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {aFazer && !atendimentoId && (
-                      <select
-                        aria-label={`Status de ${i.procedimento}`}
-                        value={i.status}
-                        onChange={(e) =>
-                          iniciar(async () => {
-                            const r = await mudarStatusDoItem(i.id, e.target.value as StatusItem);
-                            avisar(r.ok ? r.mensagem : r.erro, r.ok ? "sucesso" : "erro");
-                          })
-                        }
-                        className="rounded-lg border border-borda-forte bg-superficie px-2 py-1 text-xs"
-                      >
-                        {STATUS_MANUAIS.map((s) => (
-                          <option key={s} value={s}>
-                            {STATUS_ITEM[s].rotulo}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {!aFazer && i.status !== "realizado" && !atendimentoId && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          iniciar(async () => {
-                            const r = await mudarStatusDoItem(i.id, "pendente");
-                            avisar(r.ok ? r.mensagem : r.erro, r.ok ? "sucesso" : "erro");
-                          })
-                        }
-                        className="text-xs text-dourado-escuro underline"
-                      >
-                        Voltar para pendente
-                      </button>
-                    )}
-                    {aFazer && atendimentoId && (
-                      <button
-                        type="button"
-                        onClick={() => setRealizando(i)}
-                        className="rounded-lg bg-grafite px-3 py-1.5 text-xs font-medium text-white hover:bg-black"
-                      >
-                        Realizar nesta consulta
-                      </button>
-                    )}
-                  </div>
+              <li key={i.id} aria-label={`${i.procedimento} — ${formatarMoeda(i.valor_centavos)}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 sm:px-4">
+                {naConsulta && !feitoAntes ? (
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={feitoAqui}
+                      disabled={travado || pendente}
+                      onChange={(e) => {
+                        const v = e.target.checked;
+                        iniciar(async () => {
+                          marcar([i.id, v]);
+                          Avisar(await marcarFeito(i.id, atendimentoId!, v));
+                        });
+                      }}
+                      className="size-4 accent-[#b08d57]"
+                    />
+                    <span className="sr-only">Feito hoje: {i.procedimento}</span>
+                  </label>
+                ) : i.status === "realizado" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-rotina" aria-hidden />
+                ) : (
+                  <span className="size-4 shrink-0 rounded border border-borda-forte" aria-hidden />
+                )}
+                <span className="min-w-0 flex-1 font-medium">{i.procedimento}</span>
+                <span className="text-sm tabular-nums">{formatarMoeda(i.valor_centavos)}</span>
+                <span className="w-full pl-6 text-xs sm:w-auto sm:pl-0">
+                  {feitoAqui ? (
+                    <span className="font-medium text-rotina">Feito hoje</span>
+                  ) : feitoAntes ? (
+                    <span className="text-rotina">
+                      Feito na consulta {String(i.realizado_atendimento_numero).padStart(2, "0")}
+                      {i.realizado_em ? ` · ${br(i.realizado_em)}` : ""}
+                    </span>
+                  ) : (
+                    <span className="text-importante">Pendente</span>
+                  )}
+                </span>
+                {aFazer && !travado && (
+                  <button
+                    type="button"
+                    aria-label={`Remover ${i.procedimento} do plano`}
+                    disabled={pendente}
+                    onClick={() => iniciar(async () => Avisar(await removerDoPlano(i.id)))}
+                    className="rounded p-1 text-sutil hover:text-urgente"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 )}
               </li>
             );
           })}
+          <li className="flex items-center justify-between bg-fundo px-3 py-2.5 sm:px-4" aria-label="Total do orçamento">
+            <span className="text-sm font-semibold tracking-wide uppercase">Total</span>
+            <span className="font-semibold tabular-nums">{formatarMoeda(total)}</span>
+          </li>
         </ul>
       )}
-      {editavel && <AdicionarAoPlano pessoaId={pessoaId} procedimentos={procedimentos} atendimentoId={atendimentoId} />}
-      {realizando && atendimentoId && (
-        <JanelaRealizar
-          item={realizando}
-          pessoaId={pessoaId}
-          atendimentoId={atendimentoId}
-          formas={formas}
-          podeVerFinanceiro={podeVerFinanceiro}
-          aoFechar={() => setRealizando(null)}
-        />
-      )}
+      {!travado && <NovoProcedimento pessoaId={pessoaId} sugestoes={sugestoes} atendimentoId={atendimentoId} />}
     </div>
   );
 }
 
-function AdicionarAoPlano({ pessoaId, procedimentos, atendimentoId }: { pessoaId: string; procedimentos: ProcedimentoPlano[]; atendimentoId?: string }) {
-  const [aberto, setAberto] = useState(false);
-  const [procedimentoId, setProcedimentoId] = useState("");
+function NovoProcedimento({ pessoaId, sugestoes, atendimentoId }: { pessoaId: string; sugestoes: ProcedimentoPlano[]; atendimentoId?: string }) {
+  const [nome, setNome] = useState("");
   const [valor, setValor] = useState("");
-  const [dente, setDente] = useState("");
-  const [status, setStatus] = useState<"orcado" | "aceito" | "pendente">("orcado");
-  const [erro, setErro] = useState<string | null>(null);
+  const [feito, setFeito] = useState(false);
   const [pendente, iniciar] = useTransition();
+  const idNome = useId();
+  const idValor = useId();
 
-  if (!aberto)
-    return (
-      <button type="button" onClick={() => setAberto(true)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3 py-1.5 text-sm hover:border-dourado">
-        <Plus className="size-4 text-dourado" /> Adicionar procedimento ao plano
-      </button>
-    );
+  function escolher(v: string) {
+    setNome(v);
+    const s = sugestoes.find((x) => x.nome.toLowerCase() === v.trim().toLowerCase());
+    if (s?.ticket_medio_centavos && !valor) setValor(reais(s.ticket_medio_centavos));
+  }
+
   return (
-    <div className="mt-3 rounded-xl border border-borda bg-superficie p-4" role="group" aria-label="Adicionar ao plano">
-      <div className="grid gap-x-3 sm:grid-cols-2">
-        <Rotulo texto="Procedimento">
-          {(id) => (
-            <select
-              id={id}
-              value={procedimentoId}
-              onChange={(e) => {
-                setProcedimentoId(e.target.value);
-                const p = procedimentos.find((x) => x.id === e.target.value);
-                if (p?.ticket_medio_centavos && !valor) setValor(reais(p.ticket_medio_centavos));
-              }}
-              className={CAMPO}
-            >
-              <option value="">Escolha…</option>
-              {procedimentos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                </option>
-              ))}
-            </select>
-          )}
-        </Rotulo>
-        <Rotulo texto="Valor (R$)">
-          {(id) => <input id={id} value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="Ex.: 1.200,00" className={CAMPO} />}
-        </Rotulo>
-        <Rotulo texto="Dente(s) (opcional)">
-          {(id) => <input id={id} value={dente} onChange={(e) => setDente(e.target.value)} maxLength={60} placeholder="Ex.: 11, 21" className={CAMPO} />}
-        </Rotulo>
-        <Rotulo texto="Status">
-          {(id) => (
-            <select id={id} value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={CAMPO}>
-              <option value="orcado">Orçado</option>
-              <option value="aceito">Aceito</option>
-              <option value="pendente">Pendente</option>
-            </select>
-          )}
-        </Rotulo>
+    <div className="mt-3 grid gap-2 rounded-xl border border-dashed border-borda-forte p-3 sm:grid-cols-[1fr_9rem_auto_auto] sm:items-end" role="group" aria-label="Novo procedimento">
+      <div>
+        <label htmlFor={idNome} className="text-xs text-sutil">
+          Procedimento
+        </label>
+        <CampoProcedimento id={idNome} value={nome} onChange={escolher} sugestoes={sugestoes} placeholder="Ex.: Facetas em resina" className={CAMPO} />
       </div>
-      {erro && (
-        <p role="alert" className="mt-3 text-sm text-urgente">
-          {erro}
-        </p>
+      <div>
+        <label htmlFor={idValor} className="text-xs text-sutil">
+          Valor (R$)
+        </label>
+        <input id={idValor} value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" className={CAMPO} />
+      </div>
+      {atendimentoId && (
+        <label className="flex items-center gap-2 pb-2 text-sm">
+          <input type="checkbox" checked={feito} onChange={(e) => setFeito(e.target.checked)} className="size-4 accent-[#b08d57]" />
+          Feito hoje
+        </label>
       )}
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" onClick={() => setAberto(false)} className="rounded-lg border border-borda-forte px-3.5 py-2 text-sm">
-          Cancelar
-        </button>
-        <button
-          type="button"
-          disabled={pendente}
-          onClick={() =>
-            iniciar(async () => {
-              setErro(null);
-              if (!procedimentoId) return setErro("Escolha o procedimento.");
-              const r = await adicionarAoPlano({ pessoaId, procedimentoId, valor, dente, atendimentoId: atendimentoId ?? "", status });
-              if (r.ok) {
-                avisar(r.mensagem);
-                setAberto(false);
-                setProcedimentoId("");
-                setValor("");
-                setDente("");
-              } else setErro(r.erro);
-            })
-          }
-          className="rounded-lg bg-grafite px-3.5 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
-        >
-          {pendente ? "Salvando…" : "Adicionar ao plano"}
-        </button>
-      </div>
+      <button
+        type="button"
+        disabled={pendente}
+        onClick={() =>
+          iniciar(async () => {
+            const r = await adicionarProcedimento({ pessoaId, nome, valor, atendimentoId: atendimentoId ?? "", feito });
+            Avisar(r);
+            if (r.ok) {
+              setNome("");
+              setValor("");
+              setFeito(false);
+            }
+          })
+        }
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-grafite px-3.5 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+      >
+        <Plus className="size-4" /> {pendente ? "Adicionando…" : "Adicionar"}
+      </button>
     </div>
   );
 }
 
-// ─── Realizar + pagamento ────────────────────────────────────────────────────
+// ─── Pagamento do plano (pagamento ≠ realização) ─────────────────────────────
 
-type Como = "pago" | "parcial" | "a_pagar" | "ja_registrado" | "sem_cobranca";
-const OPCOES: { id: Como; rotulo: string; ajuda: string }[] = [
-  { id: "pago", rotulo: "Pago", ajuda: "Recebido hoje." },
-  { id: "parcial", rotulo: "Pagamento parcial", ajuda: "Pagou uma parte; o resto na data prevista." },
-  { id: "a_pagar", rotulo: "Não pago", ajuda: "Vai pagar depois: data prevista e parcelas." },
-  { id: "ja_registrado", rotulo: "Já está no Financeiro", ajuda: "Ligar a um pagamento já registrado." },
-  { id: "sem_cobranca", rotulo: "Sem cobrança", ajuda: "Cortesia, garantia, retorno incluso…" },
+export function PagamentoPlano({
+  planoId,
+  situacao,
+  formas,
+  parcelas,
+  hoje,
+}: {
+  planoId: string | null;
+  situacao: SituacaoPlano | null;
+  formas: FormaPlano[];
+  parcelas: ParcelaFin[];
+  hoje: string;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const s = situacao ?? { total: 0, registrado: 0, pago: 0, pendente: 0, a_registrar: 0, atrasado: 0, proximo_vencimento: null };
+  const quadros = [
+    { rotulo: "Total do orçamento", valor: s.total, cor: "text-grafite" },
+    { rotulo: "Pago", valor: s.pago, cor: "text-rotina" },
+    { rotulo: "Pendente", valor: s.pendente, cor: Number(s.pendente) > 0 ? (Number(s.atrasado) > 0 ? "text-urgente" : "text-importante") : "text-rotina" },
+  ];
+  return (
+    <div>
+      <dl className="grid grid-cols-3 gap-2">
+        {quadros.map((q) => (
+          <div key={q.rotulo} className="rounded-xl border border-borda bg-fundo/60 px-3 py-2.5">
+            <dt className="text-[11px] font-semibold tracking-wide text-sutil uppercase">{q.rotulo}</dt>
+            <dd className={`mt-0.5 text-lg font-semibold tabular-nums ${q.cor}`}>{formatarMoeda(Number(q.valor))}</dd>
+          </div>
+        ))}
+      </dl>
+      {Number(s.atrasado) > 0 && <p className="mt-2 text-sm text-urgente">{formatarMoeda(Number(s.atrasado))} em atraso.</p>}
+      {Number(s.pendente) > 0 && Number(s.a_registrar) === 0 && s.proximo_vencimento && (
+        <p className="mt-2 text-sm text-suave">Próximo pagamento previsto para {br(s.proximo_vencimento)}.</p>
+      )}
+      {Number(s.a_registrar) > 0 && planoId && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dourado/50 bg-dourado-claro/50 px-3 py-2.5">
+          <p className="text-sm">
+            {formatarMoeda(Number(s.a_registrar))} ainda sem pagamento registrado.
+          </p>
+          <button type="button" onClick={() => setAberto(true)} className="rounded-lg bg-grafite px-3.5 py-2 text-sm font-medium text-white hover:bg-black">
+            Registrar pagamento
+          </button>
+        </div>
+      )}
+      {parcelas.length > 0 && (
+        <>
+          <h3 className="mt-4 text-xs font-semibold tracking-wide text-sutil uppercase">Pagamentos previstos</h3>
+          <ul aria-label="Pagamentos previstos do plano" className="-mb-3">
+            {parcelas.map((x) => (
+              <LinhaParcela key={x.id} p={x} hoje={hoje} />
+            ))}
+          </ul>
+        </>
+      )}
+      {aberto && planoId && <JanelaPagamentoPlano planoId={planoId} aRegistrar={Number(s.a_registrar)} formas={formas} hoje={hoje} aoFechar={() => setAberto(false)} />}
+    </div>
+  );
+}
+
+type Como = "integral" | "parcial" | "nao_pago";
+const OPCOES: { id: Como; rotulo: string }[] = [
+  { id: "integral", rotulo: "Pago integralmente" },
+  { id: "parcial", rotulo: "Parcialmente pago" },
+  { id: "nao_pago", rotulo: "Não pago" },
 ];
 
-function JanelaRealizar({
-  item,
-  pessoaId,
-  atendimentoId,
-  formas,
-  podeVerFinanceiro,
-  aoFechar,
-}: {
-  item: ItemPlano;
-  pessoaId: string;
-  atendimentoId: string;
-  formas: FormaPlano[];
-  podeVerFinanceiro: boolean;
-  aoFechar: () => void;
-}) {
-  const [negociacoes, setNegociacoes] = useState<NegociacaoPaciente[] | null>(null);
-  const [como, setComo] = useState<Como>(podeVerFinanceiro ? "pago" : "sem_cobranca");
-  const [valor, setValor] = useState(reais(item.valor_centavos));
+function JanelaPagamentoPlano({ planoId, aRegistrar, formas, hoje, aoFechar }: { planoId: string; aRegistrar: number; formas: FormaPlano[]; hoje: string; aoFechar: () => void }) {
+  const [como, setComo] = useState<Como>("integral");
   const [formaId, setFormaId] = useState("");
-  const [pagoAgora, setPagoAgora] = useState("");
+  const [valorPago, setValorPago] = useState("");
+  const [dataPagamento, setDataPagamento] = useState(hoje);
   const [vencimento, setVencimento] = useState("");
   const [parcelas, setParcelas] = useState("1");
-  const [vendaId, setVendaId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
   const forma = formas.find((f) => f.id === formaId);
-  const cobra = como === "pago" || como === "parcial" || como === "a_pagar";
-  const podeParcelar = forma ? forma.max_parcelas > 1 && (como !== "pago" || forma.recebe_na_hora) : como !== "pago";
-
-  useEffect(() => {
-    if (podeVerFinanceiro) negociacoesDoPaciente(pessoaId).then(setNegociacoes);
-  }, [pessoaId, podeVerFinanceiro]);
-
-  const opcoes = OPCOES.filter((o) => (podeVerFinanceiro ? o.id !== "ja_registrado" || negociacoes?.length : o.id === "sem_cobranca"));
+  const cartao = Boolean(forma?.recebe_na_hora);
+  const pago = como === "integral" ? aRegistrar : como === "parcial" ? (paraCentavos(valorPago) ?? 0) : 0;
+  const restante = Math.max(aRegistrar - pago, 0);
+  const podeParcelar = como !== "integral" || cartao;
 
   function salvar() {
     setErro(null);
     iniciar(async () => {
-      const r = await realizarProcedimento({
-        itemId: item.id,
-        atendimentoId,
+      const r = await registrarPagamentoDoPlano({
+        planoId,
         como,
-        valor,
         formaId,
-        pagoAgora,
+        valorPago,
+        dataPagamento,
         vencimento,
         parcelas: podeParcelar ? parcelas : "1",
-        vendaId,
       });
       if (r.ok) {
         avisar(r.mensagem);
@@ -377,81 +353,66 @@ function JanelaRealizar({
   }
 
   return (
-    <Dialogo aberto aoFechar={aoFechar} titulo={`Realizar: ${item.procedimento}`} subtitulo={`${formatarMoeda(item.valor_centavos)}${item.dente ? ` · dente ${item.dente}` : ""}`}>
-      <p className="text-sm font-medium">Como ficou o pagamento?</p>
-      {!podeVerFinanceiro && <p className="mt-1 text-xs text-sutil">Seu acesso não inclui o financeiro: o pagamento é registrado por quem cuida dele.</p>}
-      <div role="radiogroup" aria-label="Pagamento" className="mt-2 grid gap-2 sm:grid-cols-2">
-        {opcoes.map((o) => (
+    <Dialogo aberto aoFechar={aoFechar} titulo="Registrar pagamento" subtitulo={`Valor a registrar: ${formatarMoeda(aRegistrar)}`}>
+      <div role="radiogroup" aria-label="Como foi o pagamento" className="grid grid-cols-3 gap-2">
+        {OPCOES.map((o) => (
           <button
             key={o.id}
             type="button"
             role="radio"
             aria-checked={como === o.id}
             onClick={() => setComo(o.id)}
-            className={`rounded-lg border px-3 py-2 text-left text-sm ${como === o.id ? "border-dourado bg-dourado-claro" : "border-borda-forte hover:border-dourado"}`}
+            className={`rounded-lg border px-2 py-2 text-sm ${como === o.id ? "border-dourado bg-dourado-claro font-medium" : "border-borda-forte hover:border-dourado"}`}
           >
-            <span className="font-medium">{o.rotulo}</span>
-            <span className="block text-xs text-sutil">{o.ajuda}</span>
+            {o.rotulo}
           </button>
         ))}
       </div>
-
-      {como === "ja_registrado" && (
-        <Rotulo texto="Pagamento no Financeiro">
-          {(id) => (
-            <select id={id} value={vendaId} onChange={(e) => setVendaId(e.target.value)} className={CAMPO}>
-              <option value="">Escolha…</option>
-              {negociacoes?.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.descricao}
-                </option>
-              ))}
-            </select>
-          )}
-        </Rotulo>
-      )}
-
-      {cobra && (
-        <>
-          <div className="grid gap-x-3 sm:grid-cols-2">
-            <Rotulo texto="Valor">
-              {(id) => <input id={id} value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" className={CAMPO} />}
+      <Rotulo texto="Forma de pagamento">
+        {(id) => (
+          <select id={id} value={formaId} onChange={(e) => setFormaId(e.target.value)} className={CAMPO}>
+            <option value="">Escolha…</option>
+            {formas.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.nome}
+              </option>
+            ))}
+          </select>
+        )}
+      </Rotulo>
+      {cartao && <p className="mt-2 text-xs text-sutil">Cartão é recebido na hora: entra como pago, sem lembretes.</p>}
+      {!cartao && como !== "nao_pago" && (
+        <div className="grid gap-x-3 sm:grid-cols-2">
+          {como === "parcial" && (
+            <Rotulo texto="Valor pago">
+              {(id) => <input id={id} value={valorPago} onChange={(e) => setValorPago(e.target.value)} inputMode="decimal" placeholder="Ex.: 3.000,00" className={CAMPO} />}
             </Rotulo>
-            <Rotulo texto="Forma de pagamento">
-              {(id) => (
-                <select id={id} value={formaId} onChange={(e) => setFormaId(e.target.value)} className={CAMPO}>
-                  <option value="">Escolha…</option>
-                  {formas.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nome}
-                    </option>
-                  ))}
-                </select>
-              )}
+          )}
+          <Rotulo texto="Data do pagamento">
+            {(id) => <input id={id} type="date" max={hoje} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} className={CAMPO} />}
+          </Rotulo>
+        </div>
+      )}
+      {!cartao && como !== "integral" && (
+        <>
+          <p className="mt-3 rounded-lg bg-fundo px-3 py-2 text-sm">
+            Valor restante: <strong className="tabular-nums">{formatarMoeda(restante)}</strong>
+          </p>
+          <div className="grid gap-x-3 sm:grid-cols-2">
+            <Rotulo texto="Data prevista para o restante">
+              {(id) => <input id={id} type="date" min={hoje} value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={CAMPO} />}
+            </Rotulo>
+            <Rotulo texto="Parcelas do restante">
+              {(id) => <input id={id} type="number" min={1} max={60} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={CAMPO} />}
             </Rotulo>
           </div>
-          {forma?.recebe_na_hora ? (
-            <p className="mt-2 text-xs text-sutil">Cartão é recebido na hora: entra como pago, sem lembretes.</p>
-          ) : (
-            <>
-              {como === "parcial" && (
-                <Rotulo texto="Pago agora">
-                  {(id) => <input id={id} value={pagoAgora} onChange={(e) => setPagoAgora(e.target.value)} inputMode="decimal" placeholder="Ex.: 500,00" className={CAMPO} />}
-                </Rotulo>
-              )}
-              {como !== "pago" && (
-                <Rotulo texto={como === "parcial" ? "Data prevista do restante" : "Data prevista do pagamento"}>
-                  {(id) => <input id={id} type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={CAMPO} />}
-                </Rotulo>
-              )}
-            </>
-          )}
-          {podeParcelar && (
-            <Rotulo texto="Parcelas">
-              {(id) => <input id={id} type="number" min={1} max={forma?.max_parcelas ?? 60} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={CAMPO} />}
-            </Rotulo>
-          )}
+          <p className="mt-2 text-xs text-sutil">No dia previsto, o lembrete aparece nas pendências de hoje; se passar, aparece como vencido.</p>
         </>
+      )}
+      {cartao && (
+        <Rotulo texto="Parcelas no cartão">
+          {(id) => <input id={id} type="number" min={1} max={forma?.max_parcelas ?? 12} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={CAMPO} />}
+        </Rotulo>
       )}
       {erro && (
         <p role="alert" className="mt-3 text-sm text-urgente">
@@ -463,7 +424,7 @@ function JanelaRealizar({
           Voltar
         </button>
         <button type="button" disabled={pendente} onClick={salvar} className="rounded-lg bg-grafite px-3.5 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50">
-          {pendente ? "Salvando…" : "Marcar como realizado"}
+          {pendente ? "Salvando…" : "Registrar pagamento"}
         </button>
       </div>
     </Dialogo>

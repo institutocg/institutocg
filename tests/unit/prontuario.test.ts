@@ -64,11 +64,15 @@ describe("consultas", () => {
       "Consulta 01 — Avaliação — 01/10/2026",
     );
   });
-  it("ficha: valida datas e tamanhos", () => {
-    const base = { motivo: [], anamnese: [], diagnostico: [], orientacoes: [] };
-    expect(esquemaFicha.safeParse({ ...base, retorno_em: "2026-10-15" }).success).toBe(true);
-    expect(esquemaFicha.safeParse({ ...base, retorno_em: "15/10/2026" }).success).toBe(false);
-    expect(esquemaFicha.safeParse({ ...base, evolucao: "x".repeat(4001) }).success).toBe(false);
+  it("ficha: só texto livre + odontograma, com limites de tamanho", () => {
+    expect(esquemaFicha.safeParse({ motivo_obs: "Dor no 26", queixa: "Dói ao mastigar", anamnese_obs: "Hipertensa" }).success).toBe(true);
+    expect(esquemaFicha.safeParse({ anamnese_obs: "x".repeat(2001) }).success).toBe(false);
+    expect(esquemaFicha.parse({}).motivo_obs).toBe("");
+  });
+  it("título usa o motivo escrito quando não há procedimento agendado", () => {
+    expect(tituloConsulta({ numero: 2, data: "2026-10-02", procedimento: null, motivo: [], tipo: null, motivo_obs: "Dor no dente 26" })).toBe(
+      "Consulta 02 — Dor no dente 26 — 02/10/2026",
+    );
   });
   it("idade", () => {
     expect(idade("1985-06-15", "2026-10-01")).toBe(41);

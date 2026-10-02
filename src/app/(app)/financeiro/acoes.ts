@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { comoUsuaria, mensagemDeErro } from "@/lib/db";
 import { formatarMoeda } from "@/lib/moeda";
+import { resolverProcedimento } from "@/modules/procedimentos/servidor";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import type { Retorno } from "../hoje/acoes";
 
@@ -82,7 +83,7 @@ export async function mudarVencimento(parcelaId: string, novaData: string, obser
 const centavos = z.number().int().min(0);
 const esquemaNegociacao = z.object({
   pessoaId: uuid,
-  procedimentoId: z.union([z.literal(""), uuid]),
+  procedimento: z.string().trim().max(120).default(""),
   valorCentavos: centavos.positive("Informe o valor."),
   descontoCentavos: centavos.default(0),
   entradaCentavos: centavos.default(0),
@@ -104,10 +105,11 @@ export async function registrarNegociacao(dados: DadosNegociacao): Promise<Retor
   const sessao = await exigirSessao();
   try {
     const r = await comoUsuaria(sessao.usuarioId, async (db) => {
+      const procedimentoId = await resolverProcedimento(db, sessao.clinicaId, v.procedimento);
       const { rows } = await db.query<{ r: { parcelas: number; lembretes: number } }>(
         `select public.registrar_negociacao($1, $2, $3::uuid, $4, $5, $6, $7::date, $8::uuid, $9, $10::date, $11::uuid, $12) as r`,
         [
-          sessao.clinicaId, v.pessoaId, v.procedimentoId || null, v.valorCentavos, v.descontoCentavos, v.entradaCentavos,
+          sessao.clinicaId, v.pessoaId, procedimentoId, v.valorCentavos, v.descontoCentavos, v.entradaCentavos,
           v.entradaEm || null, v.entradaFormaId || null, v.parcelas, v.primeiroVencimento || null, v.formaId, v.observacao || null,
         ],
       );

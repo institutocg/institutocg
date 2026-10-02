@@ -290,8 +290,6 @@ export default async function Agenda({
                         hoje={hoje}
                         motivos={dados.motivos}
                         profissionais={dados.profissionais}
-                        formas={dados.formas}
-                        podeVerFinanceiro={sessao.podeVerFinanceiro}
                         podeVerProntuario={sessao.podeVerProntuario}
                         mostrarDentista={variasDentistas && !dentista}
                       />

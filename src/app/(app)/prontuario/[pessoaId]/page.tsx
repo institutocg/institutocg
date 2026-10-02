@@ -2,10 +2,9 @@ import { AlertTriangle, ArrowLeft, CalendarClock, ChevronRight, UserRound } from
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { LinhaParcela } from "@/components/financeiro/financeiro";
 import { Bloco } from "@/components/prontuario/ficha";
 import { Odontograma } from "@/components/prontuario/odontograma";
-import { BotaoAbrirProntuario, BotaoNovaConsulta, PlanoTratamento } from "@/components/prontuario/plano";
+import { BotaoAbrirProntuario, BotaoNovaConsulta, PagamentoPlano, PlanoTratamento } from "@/components/prontuario/plano";
 import { comoUsuaria } from "@/lib/db";
 import { formatarMoeda } from "@/lib/moeda";
 import { formatarTelefone } from "@/lib/telefone";
@@ -14,6 +13,7 @@ import {
   carregarCatalogo,
   carregarConsultas,
   carregarFinanceiro,
+  carregarPagamentoPlano,
   carregarPaciente,
   carregarPlano,
   carregarProximas,
@@ -54,12 +54,13 @@ export default async function Prontuario({
     const proximas = await carregarProximas(db, pessoaId);
     const financeiro = sessao.podeVerFinanceiro ? await carregarFinanceiro(db, pessoaId) : null;
     const catalogo = await carregarCatalogo(db, sessao.clinicaId);
+    const pagamento = await carregarPagamentoPlano(db, pessoaId, sessao.podeVerFinanceiro);
     // Odontograma: o da consulta escolhida (evolução) ou o da mais recente.
     const escolhida = consultas.find((c) => c.id === busca.consulta) ?? consultas[0];
     const odonto = escolhida
       ? (await db.query<{ odontograma: unknown }>("select odontograma from public.atendimentos where id = $1", [escolhida.id])).rows[0].odontograma
       : {};
-    return { paciente, hoje, consultas, plano, proximas, financeiro, catalogo, escolhida, odonto: normalizarOdontograma(odonto) };
+    return { paciente, hoje, consultas, plano, proximas, financeiro, catalogo, pagamento, escolhida, odonto: normalizarOdontograma(odonto) };
   });
   if (!d) notFound();
 
@@ -67,7 +68,9 @@ export default async function Prontuario({
   const ultima = consultas[0] ?? null;
   const proxima = d.proximas[0] ?? null;
   const anos = idade(p.data_nascimento, hoje);
-  const alertas = ultima?.anamnese ?? [];
+  // Anamnese mais recente preenchida (texto livre), em destaque no topo.
+  const anamnese =
+    consultas.map((c) => [c.anamnese.join(", "), c.anamnese_obs].filter(Boolean).join(" · ")).find((t) => t.length > 0) ?? "";
   const totais = totaisPlano(plano);
   const realizados = plano.filter((i) => i.status === "realizado");
   const pendentes = plano.filter((i) => ainda_a_fazer(i.status));
@@ -88,14 +91,10 @@ export default async function Prontuario({
               .filter(Boolean)
               .join(" · ")}
           </p>
-          {alertas.length > 0 && (
-            <p className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Alertas de saúde">
-              <AlertTriangle className="size-4 text-urgente" aria-hidden />
-              {alertas.map((a) => (
-                <span key={a} className="rounded-full bg-urgente-claro px-2 py-0.5 text-xs font-medium text-urgente">
-                  {a}
-                </span>
-              ))}
+          {anamnese && (
+            <p className="mt-2 flex max-w-2xl items-start gap-1.5 rounded-lg bg-urgente-claro px-3 py-1.5 text-sm text-urgente" aria-label="Anamnese">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>{anamnese.length > 220 ? `${anamnese.slice(0, 218)}…` : anamnese}</span>
             </p>
           )}
         </div>
@@ -219,28 +218,17 @@ export default async function Prontuario({
           </Bloco>
 
           <Bloco titulo="Plano de tratamento / orçamento" id="plano">
-            <PlanoTratamento
-              pessoaId={p.id}
-              itens={plano}
-              procedimentos={d.catalogo.procedimentos}
-              formas={d.catalogo.formas}
-              podeVerFinanceiro={sessao.podeVerFinanceiro}
-              editavel
-            />
-            {plano.length > 0 && (
-              <p className="mt-3 text-xs text-sutil">
-                Total do plano {formatarMoeda(totais.total)}. Para marcar um procedimento como realizado, abra a consulta em que ele foi feito.
-              </p>
-            )}
+            <PlanoTratamento pessoaId={p.id} itens={plano} sugestoes={d.catalogo.procedimentos} />
+            <p className="mt-3 text-xs text-sutil">Para marcar o que foi feito, abra a consulta do dia.</p>
           </Bloco>
 
-          {d.financeiro && d.financeiro.parcelas.length > 0 && (
-            <Bloco titulo="Pagamentos em aberto" id="financeiro" acao={<Link href={`/financeiro?q=${encodeURIComponent(p.nome)}`} className="text-xs text-dourado-escuro underline">Ver no Financeiro</Link>}>
-              <ul aria-label="Pagamentos em aberto do paciente" className="-my-3">
-                {d.financeiro.parcelas.map((x) => (
-                  <LinhaParcela key={x.id} p={x} hoje={hoje} />
-                ))}
-              </ul>
+          {sessao.podeVerFinanceiro && (
+            <Bloco
+              titulo="Pagamento"
+              id="financeiro"
+              acao={<Link href={`/financeiro?q=${encodeURIComponent(p.nome)}`} className="text-xs text-dourado-escuro underline">Ver no Financeiro</Link>}
+            >
+              <PagamentoPlano planoId={d.pagamento.planoId} situacao={d.pagamento.situacao} formas={d.catalogo.formas} parcelas={d.pagamento.parcelas} hoje={hoje} />
             </Bloco>
           )}
         </div>

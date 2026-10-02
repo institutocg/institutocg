@@ -59,7 +59,7 @@ test("registrar negociação com entrada em data futura cria os lembretes", asyn
   const j = page.getByRole("dialog");
   await j.getByLabel("Paciente").fill("fernanda");
   await j.getByRole("list", { name: "Pacientes encontrados" }).getByRole("button", { name: /Fernanda Lopes/ }).click();
-  await j.getByLabel("Procedimento").selectOption({ label: "Facetas de porcelana" });
+  await j.getByLabel("Procedimento").fill("Facetas de porcelana");
   await j.getByLabel("Valor", { exact: true }).fill("5.000");
   await j.getByLabel("Valor da entrada").fill("2.000");
   await j.getByLabel("Data da entrada").fill(daquiA(9));

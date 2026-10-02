@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { comoUsuaria, mensagemDeErro } from "@/lib/db";
-import { formatarMoeda, paraCentavos } from "@/lib/moeda";
 import { normalizarTelefone } from "@/lib/telefone";
 import { rotuloData } from "@/modules/painel/painel";
+import { resolverProcedimento } from "@/modules/procedimentos/servidor";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import type { Retorno } from "../hoje/acoes";
 
@@ -60,17 +60,15 @@ const esquemaAgendar = z
     whatsapp: z.string().trim().max(30).optional(),
     tipoCadastro: z.enum(["novo_contato", "paciente_antigo"]).default("novo_contato"),
     tipo: z.enum(["avaliacao", "apresentacao_orcamento", "procedimento", "retorno", "manutencao"]),
-    procedimentoId: z.union([z.literal(""), uuid]),
+    procedimento: z.string().trim().max(120).default(""),
     inicio: dataHora,
     duracao: z.coerce.number().int().min(15).max(240),
     profissionalId: z.union([z.literal(""), uuid]),
     status: z.enum(["agendado", "confirmado"]),
     observacoes: z.string().trim().max(500).optional(),
     encaixe: z.boolean().default(false),
-    valor: z.string().trim().max(20).optional(),
   })
   .superRefine((v, ctx) => {
-    if (v.valor && !paraCentavos(v.valor)) ctx.addIssue({ code: "custom", message: "Valor inválido. Ex.: 1.500,00" });
     if (!v.pessoaId) {
       if (!v.nome || v.nome.length < 3) ctx.addIssue({ code: "custom", message: "Selecione o paciente ou informe o nome completo." });
       else if (!v.whatsapp || !normalizarTelefone(v.whatsapp)) ctx.addIssue({ code: "custom", message: "Informe um WhatsApp válido, com DDD." });
@@ -86,15 +84,15 @@ export async function agendarConsulta(dados: DadosAgendar): Promise<RetornoAgend
   const sessao = await exigirSessao();
   try {
     const r = await comoUsuaria(sessao.usuarioId, async (db) => {
+      const procedimentoId = await resolverProcedimento(db, sessao.clinicaId, v.procedimento);
       const { rows } = await db.query<{ r: { pessoa_nova: boolean; tarefa: Proxima } }>(
         `select public.agendar($1, $2::uuid, $3::public.tipo_agendamento, $4::uuid,
                 ($5::timestamp at time zone 'America/Sao_Paulo'), $6, $7::uuid, $8, $9, $10, $11, $12,
-                $13::public.tipo_cadastro, $14::bigint) as r`,
+                $13::public.tipo_cadastro) as r`,
         [
-          sessao.clinicaId, v.pessoaId || null, v.tipo, v.procedimentoId || null, v.inicio, v.duracao,
+          sessao.clinicaId, v.pessoaId || null, v.tipo, procedimentoId, v.inicio, v.duracao,
           v.profissionalId || null, v.status === "confirmado", v.observacoes || null, v.encaixe,
           v.pessoaId ? null : v.nome, v.pessoaId ? null : normalizarTelefone(v.whatsapp ?? ""), v.tipoCadastro,
-          v.valor ? paraCentavos(v.valor) : null,
         ],
       );
       return { ...rows[0].r, hoje: await hojeDa(db, sessao.clinicaId) };
@@ -200,57 +198,6 @@ export async function mudarStatusConsulta(dados: z.input<typeof esquemaStatus>):
     });
     revalidatePath("/", "layout");
     return { ok: true, mensagem: `${SUCESSO[v.status]}${frase(r.tarefa, r.hoje)}` };
-  } catch (erro) {
-    return { ok: false, erro: mensagemDeErro(erro) };
-  }
-}
-
-const esquemaAtendimento = z
-  .object({
-    agendamentoId: uuid,
-    como: z.enum(["pago", "a_pagar", "sem_cobranca", "ja_registrado"]),
-    valor: z.string().trim().max(20).optional(),
-    formaId: z.union([z.literal(""), uuid]).optional(),
-    vencimento: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")]).optional(),
-    parcelas: z.coerce.number().int().min(1, "Parcelas: de 1 a 60.").max(60, "Parcelas: de 1 a 60.").default(1),
-    observacao: z.string().trim().max(300).optional(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.como !== "pago" && v.como !== "a_pagar") return;
-    if (!v.valor || !paraCentavos(v.valor)) ctx.addIssue({ code: "custom", message: "Informe o valor. Ex.: 1.500,00" });
-    else if (!v.formaId) ctx.addIssue({ code: "custom", message: "Escolha a forma de pagamento." });
-  });
-
-const MENSAGEM_ATENDIMENTO: Record<z.infer<typeof esquemaAtendimento>["como"], string> = {
-  pago: "Comparecimento e pagamento registrados.",
-  a_pagar: "Comparecimento registrado. O pagamento ficou no Financeiro, com lembrete na data prevista.",
-  sem_cobranca: "Comparecimento registrado, sem cobrança.",
-  ja_registrado: "Comparecimento registrado. O pagamento já estava no Financeiro.",
-};
-
-/** Compareceu + como ficou o pagamento, num passo só (o Financeiro se preenche sozinho). */
-export async function registrarAtendimento(dados: z.input<typeof esquemaAtendimento>): Promise<Retorno> {
-  const lido = esquemaAtendimento.safeParse(dados);
-  if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
-  const v = lido.data;
-  const sessao = await exigirSessao();
-  const cobra = v.como === "pago" || v.como === "a_pagar";
-  try {
-    const r = await comoUsuaria(sessao.usuarioId, async (db) => {
-      const { rows } = await db.query<{ r: { situacao?: string; proximo_vencimento?: string; parcelas?: number } }>(
-        "select public.registrar_atendimento($1, $2, $3::bigint, $4::uuid, $5::date, $6, $7) as r",
-        [
-          v.agendamentoId, v.como, cobra ? paraCentavos(v.valor ?? "") : null, cobra ? v.formaId || null : null,
-          v.como === "a_pagar" ? v.vencimento || null : null, v.parcelas, v.observacao || null,
-        ],
-      );
-      return rows[0].r;
-    });
-    revalidatePath("/", "layout");
-    let mensagem = MENSAGEM_ATENDIMENTO[v.como];
-    if (v.como === "a_pagar" && r.situacao === "pago") mensagem = "Comparecimento registrado. Cartão: recebido na hora.";
-    else if (v.como === "pago" && cobra) mensagem += ` ${formatarMoeda(paraCentavos(v.valor ?? "") ?? 0)} no Financeiro.`;
-    return { ok: true, mensagem };
   } catch (erro) {
     return { ok: false, erro: mensagemDeErro(erro) };
   }

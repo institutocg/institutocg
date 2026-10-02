@@ -15,119 +15,127 @@ function daquiA(dias: number) {
 }
 const br = (d: string) => d.split("-").reverse().join("/");
 const menu = (page: Page) => page.getByRole("navigation", { name: "Menu principal" });
+const plano = (page: Page) => page.getByRole("list", { name: "Plano de tratamento" });
+const quadro = (page: Page, rotulo: string) => page.locator("dl > div").filter({ has: page.locator("dt").getByText(rotulo, { exact: true }) });
 
-test("agenda → abrir prontuário cria a consulta do dia com os dados do agendamento", async ({ page }) => {
-  await entrar(page);
-  await page.goto("/agenda");
-  await page.getByRole("button", { name: "08:30 Renata Alves" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Abrir prontuário" }).click();
-  await expect(page).toHaveURL(/\/prontuario\/[0-9a-f-]+\/consulta\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Consulta 01 — Clareamento dental — ${br(daquiA(0))}`);
-  await expect(page.getByText("às 08:30 · Dra. Lívia Moraes · aberta pela agenda · em andamento")).toBeVisible();
-  await expect(page.getByRole("group", { name: "Motivo" }).getByRole("button", { name: /Continuidade do tratamento/ })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-});
-
-test("ficha por seleção, odontograma, plano de tratamento e realizar com pagamento parcial", async ({ page }) => {
-  await entrar(page);
-  await page.goto("/prontuario?q=renata");
-  await page.getByRole("list", { name: "Pacientes encontrados" }).getByRole("link", { name: /Renata Alves/ }).click();
-  await page.getByRole("list", { name: "Histórico de consultas" }).getByRole("link", { name: /Consulta 01/ }).click();
-
-  await page.getByRole("group", { name: "Anamnese" }).getByRole("button", { name: "Diabetes" }).click();
-  await page.getByRole("group", { name: "Diagnóstico" }).getByRole("button", { name: "Manchas / escurecimento" }).click();
-  await page.getByRole("button", { name: "Dente 26", exact: true }).click();
-  const dente = page.getByRole("group", { name: "Editar dente 26" });
-  await dente.getByRole("button", { name: "Cárie" }).click();
-  await dente.getByRole("button", { name: "Face Mesial" }).click();
-  await expect(page.getByRole("button", { name: "Dente 26: Cárie (OM) · a tratar" })).toBeVisible();
-  await page.getByLabel("O que foi feito e a conduta").fill("Clareamento em consultório, 3 sessões de 15 min.");
-  await page.getByRole("group", { name: "Retorno em" }).getByRole("button", { name: "15 dias" }).click();
-  await page.getByRole("button", { name: "Salvar ficha" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Ficha salva." })).toBeVisible();
-
-  // Plano: vários procedimentos
-  for (const [proc, valor, status] of [
-    ["Clareamento dental", "1.800", "Aceito"],
-    ["Manutenção e limpeza", "350", "Pendente"],
-  ]) {
-    await page.getByRole("button", { name: "Adicionar procedimento ao plano" }).click();
-    const g = page.getByRole("group", { name: "Adicionar ao plano" });
-    await g.getByLabel("Procedimento").selectOption({ label: proc });
-    await g.getByLabel("Valor (R$)").fill(valor);
-    await g.getByLabel("Status").selectOption({ label: status });
-    await g.getByRole("button", { name: "Adicionar ao plano" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Adicionado ao plano" }).last()).toBeVisible();
-  }
-
-  // Realizar o clareamento: pagou uma parte
-  await page.getByRole("listitem", { name: "Clareamento dental — R$ 1.800,00" }).getByRole("button", { name: "Realizar nesta consulta" }).click();
-  const j = page.getByRole("dialog", { name: "Realizar: Clareamento dental" });
-  await j.getByRole("radio", { name: /Pagamento parcial/ }).click();
-  await j.getByLabel("Forma de pagamento").selectOption({ label: "PIX" });
-  await j.getByLabel("Pago agora").fill("800");
-  await j.getByLabel("Data prevista do restante").fill(daquiA(10));
-  await j.getByRole("button", { name: "Marcar como realizado" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Realizado. A parte paga e o saldo" })).toBeVisible();
-  const realizado = page.getByRole("listitem", { name: "Clareamento dental — R$ 1.800,00" }).first();
-  await expect(realizado).toContainText("Realizado");
-  await expect(realizado).toContainText("Pagamento: parcialmente pago · em aberto R$ 1.000,00");
-
-  await page.getByRole("button", { name: "Finalizar consulta" }).click();
-  await page.getByRole("dialog", { name: "Finalizar a consulta?" }).getByRole("button", { name: "Salvar e finalizar" }).click();
-  await expect(page.getByText("Consulta finalizada: o registro fica guardado")).toBeVisible();
-  await expect(page.getByRole("group", { name: "Anamnese" }).getByRole("button", { name: /Diabetes/ })).toBeDisabled();
-});
-
-test("visão geral: histórico, realizados, pendentes, odontograma e financeiro integrados", async ({ page }) => {
-  await entrar(page);
+async function abrirRenata(page: Page) {
   await page.goto("/prontuario?q=renata");
   await page.getByRole("list", { name: "Pacientes encontrados" }).getByRole("link", { name: /Renata Alves/ }).click();
   await expect(page.getByRole("heading", { name: "Renata Alves", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Alertas de saúde")).toContainText("Diabetes");
-  await expect(page.getByRole("list", { name: "Procedimentos realizados" })).toContainText("Clareamento dental");
-  await expect(page.getByRole("list", { name: "Procedimentos pendentes" })).toContainText("Manutenção e limpeza");
-  await expect(page.getByRole("img", { name: "Dente 26: Cárie (OM) · a tratar" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Pagamentos em aberto do paciente" }).getByRole("listitem", { name: "Renata Alves — R$ 1.000,00" })).toBeVisible();
+}
 
-  // O mesmo pagamento está no Financeiro (sem cadastrar de novo)
-  await menu(page).getByRole("link", { name: "Financeiro" }).click();
-  const neg = page.getByRole("listitem", { name: "Renata Alves — Clareamento dental" });
-  await expect(neg).toContainText("Parcialmente pago");
+async function adicionar(page: Page, nome: string, valor: string, feitoHoje = false) {
+  const g = page.getByRole("group", { name: "Novo procedimento" });
+  await g.getByLabel("Procedimento").fill(nome);
+  await g.getByLabel("Valor (R$)").fill(valor);
+  if (feitoHoje) await g.getByLabel("Feito hoje").check();
+  await g.getByRole("button", { name: "Adicionar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: `${nome} — ` }).last()).toBeVisible();
+}
 
-  // Quitado no Financeiro → aparece no prontuário
-  await page.getByRole("list", { name: "Previstos" }).getByRole("listitem", { name: "Renata Alves — R$ 1.000,00" }).getByRole("button", { name: "Marcar como pago" }).click();
-  await page.getByRole("dialog", { name: "Confirmar pagamento" }).getByRole("button", { name: "Confirmar pagamento" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Pagamento registrado" })).toBeVisible();
-  await page.goto("/prontuario?q=renata");
-  await page.getByRole("list", { name: "Pacientes encontrados" }).getByRole("link", { name: /Renata Alves/ }).click();
-  await expect(page.getByRole("listitem", { name: "Clareamento dental — R$ 1.800,00" })).toContainText("Pagamento: pago");
+test("agenda sem financeiro; compareceu → abrir prontuário cria a consulta do dia", async ({ page }) => {
+  await entrar(page);
+  await page.goto("/agenda");
+  const cartao = page.getByRole("button", { name: "08:30 Renata Alves" });
+  await expect(cartao).not.toContainText("R$");
+  await cartao.click();
+  const j = page.getByRole("dialog");
+  await expect(j.getByText("Valor")).toHaveCount(0);
+  await j.getByRole("button", { name: "Compareceu" }).click();
+  await expect(j.getByText("Comparecimento registrado. Registre a consulta no prontuário.")).toBeVisible();
+  await j.getByRole("button", { name: "Abrir prontuário" }).click();
+  await expect(page).toHaveURL(/\/prontuario\/[0-9a-f-]+\/consulta\/[0-9a-f-]+$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Consulta 01 — Clareamento dental — ${br(daquiA(0))}`);
+  await expect(page.getByText("às 08:30 · Dra. Lívia Moraes · aberta pela agenda · em andamento")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Motivo da consulta", exact: true })).toHaveValue("Clareamento dental");
 });
 
-test("consulta 02: nova ficha começa do odontograma anterior, sem apagar a consulta 01", async ({ page }) => {
+test("consulta simples: textos livres, odontograma, procedimentos livres com total e 'feito hoje'", async ({ page }) => {
   await entrar(page);
-  await page.goto("/prontuario?q=renata");
-  await page.getByRole("list", { name: "Pacientes encontrados" }).getByRole("link", { name: /Renata Alves/ }).click();
+  await abrirRenata(page);
+  await page.getByRole("list", { name: "Histórico de consultas" }).getByRole("link", { name: /Consulta 01/ }).click();
+
+  await page.getByRole("textbox", { name: "Queixa principal", exact: true }).fill("Dentes amarelados e uma restauração escura");
+  await page.getByRole("textbox", { name: "Anamnese / observações", exact: true }).fill("Diabética, usa metformina. Alergia a dipirona.");
+  await page.getByRole("button", { name: "Dente 26", exact: true }).click();
+  const dente = page.getByRole("group", { name: "Editar dente 26" });
+  await dente.getByRole("button", { name: "Cárie" }).click();
+  await page.getByRole("button", { name: "Salvar ficha" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Ficha salva." })).toBeVisible();
+
+  // Procedimentos escritos livremente (inclusive um que nunca foi cadastrado)
+  await adicionar(page, "Clareamento", "1.200", true);
+  await adicionar(page, "Facetas em resina", "5.000");
+  await adicionar(page, "Limpeza", "350");
+  await expect(plano(page).getByRole("listitem", { name: "Total do orçamento" })).toContainText("R$ 6.550,00");
+  await expect(plano(page).getByRole("listitem", { name: "Clareamento — R$ 1.200,00" })).toContainText("Feito hoje");
+  await expect(plano(page).getByRole("listitem", { name: "Facetas em resina — R$ 5.000,00" })).toContainText("Pendente");
+});
+
+test("pagamento do plano: paga tudo hoje, faz depois (pagamento ≠ realização)", async ({ page }) => {
+  await entrar(page);
+  await abrirRenata(page);
+  await expect(quadro(page, "Total do orçamento")).toContainText("R$ 6.550,00");
+  await expect(quadro(page, "Pendente")).toContainText("R$ 6.550,00");
+  await page.getByRole("button", { name: "Registrar pagamento" }).click();
+  const j = page.getByRole("dialog", { name: "Registrar pagamento" });
+  await expect(j).toContainText("Valor a registrar: R$ 6.550,00");
+  await j.getByRole("radio", { name: "Parcialmente pago" }).click();
+  await j.getByLabel("Forma de pagamento").selectOption({ label: "PIX" });
+  await j.getByLabel("Valor pago").fill("3.000");
+  await expect(j.getByText("Valor restante: R$ 3.550,00")).toBeVisible();
+  await j.getByLabel("Data prevista para o restante").fill(daquiA(0));
+  await j.getByRole("button", { name: "Registrar pagamento" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Pagamento registrado." })).toContainText("Pago R$ 3.000,00 · pendente R$ 3.550,00");
+  await expect(quadro(page, "Pago")).toContainText("R$ 3.000,00");
+  await expect(quadro(page, "Pendente")).toContainText("R$ 3.550,00");
+  await expect(plano(page).getByRole("listitem", { name: "Facetas em resina — R$ 5.000,00" })).toContainText("Pendente");
+
+  // Pendência de hoje no painel
+  await menu(page).getByRole("link", { name: "Hoje" }).click();
+  const card = page.getByRole("article", { name: "Renata Alves — R$ 3.550,00" });
+  await expect(card).toContainText("Pagamento previsto");
+
+  // No Financeiro, o mesmo pagamento (sem cadastrar duas vezes)
+  await menu(page).getByRole("link", { name: "Financeiro" }).click();
+  await expect(page.getByRole("listitem", { name: "Renata Alves — Plano de tratamento" })).toContainText("Parcialmente pago");
+});
+
+test("consulta 02: pendentes aparecem para marcar; odontograma parte do anterior", async ({ page }) => {
+  await entrar(page);
+  await abrirRenata(page);
   await page.getByRole("button", { name: "Nova consulta" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(`^Consulta 02 — .*${br(daquiA(0))}$`));
   await expect(page.getByText("Começou igual ao da consulta 01.")).toBeVisible();
-  await page.getByRole("button", { name: "Dente 26: Cárie (OM) · a tratar" }).click();
-  const dente = page.getByRole("group", { name: "Editar dente 26" });
-  await dente.getByRole("button", { name: "Restauração" }).click();
-  await dente.getByRole("button", { name: "Existente / realizado" }).click();
-  await page.getByRole("button", { name: "Salvar ficha" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Ficha salva." })).toBeVisible();
-  await expect(page.getByText("Desde a consulta 01: 26: Cárie → Restauração (OM) · existente / realizado.")).toBeVisible();
+  await expect(plano(page).getByRole("listitem", { name: "Clareamento — R$ 1.200,00" })).toContainText("Feito na consulta 01");
+  await plano(page).getByRole("listitem", { name: "Limpeza — R$ 350,00" }).getByRole("checkbox").check();
+  await expect(page.getByRole("status").filter({ hasText: "Marcado como feito nesta consulta." })).toBeVisible();
+  await expect(plano(page).getByRole("listitem", { name: "Limpeza — R$ 350,00" })).toContainText("Feito hoje");
+  await expect(plano(page).getByRole("listitem", { name: "Facetas em resina — R$ 5.000,00" })).toContainText("Pendente");
 
   await page.getByRole("link", { name: /Prontuário de Renata Alves/ }).click();
-  const historico = page.getByRole("list", { name: "Histórico de consultas" });
-  await expect(historico.getByRole("link")).toHaveCount(2);
-  await page.getByRole("navigation", { name: "Odontograma por consulta" }).getByRole("link", { name: /^01/ }).click();
-  await expect(page.getByRole("img", { name: "Dente 26: Cárie (OM) · a tratar" })).toBeVisible();
-  await page.getByRole("navigation", { name: "Odontograma por consulta" }).getByRole("link", { name: /^02/ }).click();
-  await expect(page.getByRole("img", { name: "Dente 26: Restauração (OM) · existente / realizado" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Histórico de consultas" }).getByRole("link")).toHaveCount(2);
+  await expect(page.getByLabel("Anamnese", { exact: true })).toContainText("Diabética");
+  await expect(page.getByRole("list", { name: "Procedimentos realizados" })).toContainText("Limpeza");
+  await expect(page.getByRole("list", { name: "Procedimentos pendentes" })).toContainText("Facetas em resina");
+});
+
+test("procedimento livre também na agenda", async ({ page }) => {
+  await entrar(page);
+  await page.goto("/agenda");
+  await page.getByRole("button", { name: "Nova consulta" }).click();
+  const j = page.getByRole("dialog");
+  await j.getByLabel("Paciente").fill("beat");
+  await j.getByRole("list", { name: "Pacientes encontrados" }).getByRole("button", { name: /Beatriz Almeida/ }).click();
+  await j.getByLabel("Procedimento", { exact: true }).fill("Gengivoplastia a laser");
+  const dia = new Date(Date.now() + 86_400_000 * 7);
+  while ([0, 6].includes(dia.getDay())) dia.setDate(dia.getDate() + 1);
+  await j.getByLabel("Data").fill(dia.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }));
+  await j.getByLabel("Horário").fill("18:00");
+  await j.getByRole("button", { name: "Marcar consulta" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Consulta marcada para" })).toBeVisible();
+  await page.goto(`/agenda?semana=${dia.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })}`);
+  await expect(page.getByRole("button", { name: "18:00 Beatriz Almeida" })).toContainText("Gengivoplastia a laser");
 });
 
 test("paciente com histórico (exemplo): Maria, pelo cadastro", async ({ page }) => {
@@ -136,12 +144,9 @@ test("paciente com histórico (exemplo): Maria, pelo cadastro", async ({ page })
   await page.getByRole("link", { name: /Maria Silva/ }).click();
   await page.getByRole("main").getByRole("link", { name: "Prontuário", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Maria Silva", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Alertas de saúde")).toContainText("Hipertensão");
+  await expect(page.getByLabel("Anamnese", { exact: true })).toContainText("Hipertensa");
   await expect(page.getByRole("list", { name: "Histórico de consultas" })).toContainText(`Consulta 01 — Facetas de porcelana — ${br(daquiA(-14))}`);
-  const plano = page.getByRole("list", { name: "Plano de tratamento" });
-  await expect(plano.getByRole("listitem", { name: "Clareamento dental — R$ 1.200,00" })).toContainText("Aceito");
-  await plano.getByLabel("Status de Facetas de porcelana").selectOption({ label: "Aceito" });
-  await expect(page.getByRole("status").filter({ hasText: "Status atualizado." })).toBeVisible();
+  await expect(plano(page).getByRole("listitem", { name: "Total do orçamento" })).toContainText("R$ 15.550,00");
 });
 
 test("secretária não vê o prontuário (dados de saúde)", async ({ page }) => {
@@ -149,9 +154,6 @@ test("secretária não vê o prontuário (dados de saúde)", async ({ page }) =>
   await expect(menu(page).getByRole("link", { name: "Prontuário" })).toHaveCount(0);
   await page.goto("/prontuario");
   await expect(page.getByText("Seu acesso não inclui o prontuário")).toBeVisible();
-  await page.goto("/agenda");
-  await page.getByRole("button", { name: "08:30 Renata Alves" }).click();
-  await expect(page.getByRole("dialog").getByRole("button", { name: "Abrir prontuário" })).toHaveCount(0);
 });
 
 test("celular: prontuário cabe na tela", async ({ page }) => {
