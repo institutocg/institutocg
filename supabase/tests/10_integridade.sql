@@ -470,9 +470,14 @@ select testes.ok((select nome from public.pessoas where id = testes.v('maria')) 
 
 -- Sem login: nada.
 set role anon;
-select testes.ok((select count(*) from public.pessoas) = 0 and (select count(*) from public.procedimentos) = 0,
-  'sem login não há acesso a nenhum dado');
+select testes.erro('select count(*) from public.pessoas', 'permission denied', 'sem login não há acesso a nenhum dado');
+select testes.erro(format('select * from public.prever_campanha(%L, %L, 6)', testes.v('c1'), 'inativos'), 'permission denied',
+  'sem login não há acesso a nenhuma função (ex.: prévia de campanha)');
 reset role;
+select testes.ok(not exists (
+  select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')),
+  'nenhuma função do sistema pode ser chamada sem login');
 
 -- ─── LGPD ────────────────────────────────────────────────────────────────────
 

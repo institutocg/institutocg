@@ -103,4 +103,8 @@ Anote o que estranhar (tela, o que fez, o que esperava) e me envie — ajusto an
 
 ## Versão oficial (depois dos testes)
 
-A versão oficial usa **outro projeto Supabase** e segue o roteiro de [`supabase/README.md`](../supabase/README.md#implantação-no-supabase-quando-formos-para-produção): só as migrações, **sem** `instalar.sql` e sem dados fictícios. Lá a faixa de teste e o botão *Recomeçar* não existem.
+Siga [`docs/PUBLICACAO_OFICIAL.md`](PUBLICACAO_OFICIAL.md). A versão oficial usa **outro projeto Supabase** e **outro projeto Vercel**, com [`supabase/producao/instalar.sql`](../supabase/producao/instalar.sql): sem dados fictícios, sem a faixa de teste e sem o botão *Recomeçar*.
+
+### Atualizar a versão de teste já instalada
+
+Cole no SQL Editor do projeto de teste, na ordem, os arquivos `supabase/versao-teste/atualizar-*.sql` que ainda não aplicou. O mais recente é `atualizar-seguranca-e-campanha-personalizada.sql`.

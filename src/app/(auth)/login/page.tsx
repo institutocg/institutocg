@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Marca } from "@/components/marca";
 import { ambienteTeste } from "@/modules/sessao/ambiente";
@@ -29,6 +30,11 @@ export default async function PaginaLogin() {
           </p>
         )}
         <FormularioLogin desenvolvimento={desenvolvimento} />
+        {!desenvolvimento && (
+          <Link href="/esqueci-senha" className="mt-5 block text-center text-sm text-dourado-escuro underline underline-offset-4">
+            Esqueci minha senha
+          </Link>
+        )}
       </div>
     </main>
   );

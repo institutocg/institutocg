@@ -11,12 +11,13 @@ export type Segmento =
   | "pos_tratamento"
   | "interesse"
   | "desmarcou"
-  | "especiais";
+  | "especiais"
+  | "personalizada";
 
 export interface DefSegmento {
   rotulo: string;
   ajuda: string;
-  grupo: "vendas" | "relacionamento";
+  grupo: "personalizada" | "vendas" | "relacionamento";
   /** Rótulo do campo de meses; null = não usa (ex.: especiais). */
   rotuloMeses: string | null;
   mesesPadrao: number;
@@ -26,6 +27,15 @@ export interface DefSegmento {
 
 // Mensagens sem preço, desconto ou promoção (regras de publicidade odontológica).
 export const SEGMENTOS: Record<Segmento, DefSegmento> = {
+  personalizada: {
+    rotulo: "Campanha personalizada",
+    ajuda: "Você escolhe quem entra: pacientes ou contatos, procedimento, tempo sem vir, idade, bairro…",
+    grupo: "personalizada",
+    rotuloMeses: null,
+    mesesPadrao: 1,
+    procedimento: "opcional",
+    mensagem: "Olá, {{nome}}! Tudo bem? Aqui é do {{clinica}}. ",
+  },
   tratamento_pendente: {
     rotulo: "Tratamento pendente",
     ajuda: "Procedimentos pendentes no plano e nenhuma consulta marcada. Quem já aceitou (e às vezes já pagou).",
@@ -128,6 +138,7 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
 };
 
 export const GRUPOS_SEGMENTO: { id: DefSegmento["grupo"]; titulo: string; ajuda: string }[] = [
+  { id: "personalizada", titulo: "Do seu jeito", ajuda: "Monte a sua própria campanha com os filtros que quiser." },
   { id: "vendas", titulo: "Trazer de volta", ajuda: "Abrem a negociação em “Reativação” no funil." },
   { id: "relacionamento", titulo: "Relacionamento e cuidado", ajuda: "Só criam o contato do dia com a mensagem; não mexem no funil." },
 ];
@@ -156,6 +167,29 @@ export const EPOCAS: { id: string; nome: string; quando: string; mensagem: strin
       "Olá, {{nome}}! Ano novo, novos planos 😊 Se cuidar do sorriso estiver na sua lista, podemos retomar a conversa sobre {{procedimento}}.",
   },
 ];
+
+/** Filtros da campanha personalizada (todos opcionais). */
+export interface FiltrosPersonalizada {
+  publico: "todos" | "pacientes" | "contatos";
+  relacao: "qualquer" | "fez" | "interesse";
+  semVirMeses: string;
+  idadeMin: string;
+  idadeMax: string;
+  local: string;
+  origemId: string;
+  negociacao: boolean;
+}
+
+export const FILTROS_VAZIOS: FiltrosPersonalizada = {
+  publico: "todos",
+  relacao: "qualquer",
+  semVirMeses: "",
+  idadeMin: "",
+  idadeMax: "",
+  local: "",
+  origemId: "",
+  negociacao: false,
+};
 
 export interface Destinatario {
   pessoa_id: string;

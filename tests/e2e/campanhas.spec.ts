@@ -11,7 +11,7 @@ async function entrar(page: Page) {
   await page.waitForURL(/\/hoje$/);
 }
 
-test("os tipos de campanha aparecem em dois grupos", async ({ page }) => {
+test("os tipos de campanha aparecem nos grupos", async ({ page }) => {
   await entrar(page);
   await page.goto("/campanhas");
   const vendas = page.getByRole("radiogroup", { name: "Trazer de volta" });
@@ -49,4 +49,24 @@ test("campanha de época preenche nome e mensagem e pede o procedimento", async 
   await page.getByRole("combobox", { name: /^Procedimento/ }).selectOption({ label: "Facetas de porcelana" });
   await page.getByRole("button", { name: "Ver quem entra" }).click();
   await expect(page.getByText(/pessoas? selecionadas?|Ninguém se encaixa/)).toBeVisible();
+});
+
+test("campanha personalizada: ela escolhe os filtros e cria", async ({ page }) => {
+  await entrar(page);
+  await page.goto("/campanhas");
+  await page.getByRole("radio", { name: /^Campanha personalizada/ }).click();
+  await page.getByLabel("Idade de").fill("119");
+  await page.getByRole("button", { name: "Ver quem entra" }).click();
+  await expect(page.getByText("Ninguém se encaixa nesses filtros")).toBeVisible();
+
+  await page.getByLabel("Idade de").fill("");
+  await page.getByLabel("Público").selectOption({ label: "Só pacientes" });
+  await page.getByRole("button", { name: "Ver quem entra" }).click();
+  const lista = page.getByRole("list", { name: "Pessoas da campanha" });
+  await expect(lista.getByRole("listitem").first()).toContainText("Paciente");
+  await page.getByLabel("Nome da campanha").fill("Novos horários");
+  await page.getByLabel("Mensagem sugerida").fill("Olá, {{nome}}! Agora atendemos também aos sábados. Quer agendar?");
+  await page.getByRole("button", { name: "Criar campanha" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /Campanha criada: \d+ contatos? programados?/ })).toBeVisible();
+  await expect(page.getByText("Novos horários").first()).toBeVisible();
 });

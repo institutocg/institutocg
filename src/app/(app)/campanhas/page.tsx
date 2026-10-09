@@ -31,6 +31,10 @@ export default async function Campanhas() {
       "select id, nome from public.procedimentos where clinica_id = $1 and ativo order by ordem, nome",
       [sessao.clinicaId],
     );
+    const origens = await db.query<{ id: string; nome: string }>(
+      "select id, nome from public.origens where clinica_id = $1 and ativo order by ordem, nome",
+      [sessao.clinicaId],
+    );
     const extra = await db.query<{ hoje: string; limite: number }>(
       `select public.hoje_clinica(id) as hoje, coalesce((configuracoes ->> 'limite_reativacao_dia')::int, 10) as limite
            from public.clinicas where id = $1`,
@@ -39,6 +43,7 @@ export default async function Campanhas() {
     return {
       campanhas: campanhas.rows,
       procedimentos: procedimentos.rows,
+      origens: origens.rows,
       ...extra.rows[0],
     };
   });
@@ -57,6 +62,7 @@ export default async function Campanhas() {
           {admin ? (
             <NovaCampanha
               procedimentos={dados.procedimentos}
+              origens={dados.origens}
               hoje={dados.hoje}
               limitePadrao={dados.limite}
             />
@@ -126,8 +132,11 @@ export default async function Campanhas() {
                       </div>
                       <p className="text-xs text-sutil">
                         {SEGMENTOS[c.segmento].rotulo}
-                        {c.procedimento ? ` · ${c.procedimento}` : ""} · há mais
-                        de {c.meses} meses · até {c.limite_dia} por dia
+                        {c.procedimento ? ` · ${c.procedimento}` : ""}
+                        {SEGMENTOS[c.segmento].rotuloMeses?.includes("há mais de")
+                          ? ` · há mais de ${c.meses} ${c.meses === 1 ? "mês" : "meses"}`
+                          : ""}{" "}
+                        · até {c.limite_dia} por dia
                         {c.primeiro_contato && c.ultimo_contato
                           ? ` · ${br(c.primeiro_contato)}${c.ultimo_contato !== c.primeiro_contato ? ` a ${br(c.ultimo_contato)}` : ""}`
                           : ""}

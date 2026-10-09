@@ -10,6 +10,8 @@ CRM interno de relacionamento e organização comercial da clínica, com prontu�
 
 Passo a passo em [`docs/VERSAO_DE_TESTE.md`](docs/VERSAO_DE_TESTE.md): um projeto Supabase só para testes + Vercel. O banco inteiro (estrutura, dados fictícios e logins) é instalado colando [`supabase/versao-teste/instalar.sql`](supabase/versao-teste/instalar.sql) no SQL Editor. Depois de mudar migrações ou `seed.sql`, regere com `./scripts/gerar-versao-teste.sh` (o `npm run test:db` confere).
 
+**Versão oficial (uso real):** [`docs/PUBLICACAO_OFICIAL.md`](docs/PUBLICACAO_OFICIAL.md) — outro projeto Supabase e outro projeto Vercel, instalados com [`supabase/producao/instalar.sql`](supabase/producao/instalar.sql) (regerar com `./scripts/gerar-versao-oficial.sh`).
+
 ## Rodar no computador (sem Supabase)
 
 ```bash

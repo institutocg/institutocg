@@ -4,7 +4,16 @@ import { Megaphone, Search } from "lucide-react";
 import { useState, useTransition, type ReactNode } from "react";
 import { criarCampanha, encerrarCampanha, preverCampanha } from "@/app/(app)/campanhas/acoes";
 import { avisar } from "@/components/avisos";
-import { EPOCAS, GRUPOS_SEGMENTO, SEGMENTOS, terminoPrevisto, type Destinatario, type Segmento } from "@/modules/campanhas/campanhas";
+import {
+  EPOCAS,
+  FILTROS_VAZIOS,
+  GRUPOS_SEGMENTO,
+  SEGMENTOS,
+  terminoPrevisto,
+  type Destinatario,
+  type FiltrosPersonalizada,
+  type Segmento,
+} from "@/modules/campanhas/campanhas";
 import { exemplo } from "@/modules/regras/regras";
 
 const CAMPO =
@@ -24,10 +33,12 @@ const br = (d: string) => d.split("-").reverse().join("/");
 
 export function NovaCampanha({
   procedimentos,
+  origens,
   hoje,
   limitePadrao,
 }: {
   procedimentos: { id: string; nome: string }[];
+  origens: { id: string; nome: string }[];
   hoje: string;
   limitePadrao: number;
 }) {
@@ -35,6 +46,7 @@ export function NovaCampanha({
   const [meses, setMeses] = useState(String(SEGMENTOS.inativos.mesesPadrao));
   const [procedimentoId, setProcedimentoId] = useState("");
   const [somenteMarketing, setSomenteMarketing] = useState(false);
+  const [filtros, setFiltros] = useState<FiltrosPersonalizada>(FILTROS_VAZIOS);
   const [nome, setNome] = useState("");
   const [mensagem, setMensagem] = useState(SEGMENTOS.inativos.mensagem);
   const [limiteDia, setLimiteDia] = useState(String(limitePadrao));
@@ -49,8 +61,18 @@ export function NovaCampanha({
     setMeses(String(SEGMENTOS[s].mesesPadrao));
     setMensagem(SEGMENTOS[s].mensagem);
     if (SEGMENTOS[s].procedimento === "nao") setProcedimentoId("");
+    if (s === "personalizada") {
+      setFiltros(FILTROS_VAZIOS);
+      setNome("");
+    }
     setLista(null);
   }
+
+  function filtrar(mudanca: Partial<FiltrosPersonalizada>) {
+    setFiltros((f) => ({ ...f, ...mudanca }));
+    setLista(null);
+  }
+  const personalizada = segmento === "personalizada";
 
   function usarEpoca(id: string) {
     const e = EPOCAS.find((x) => x.id === id);
@@ -64,7 +86,7 @@ export function NovaCampanha({
   function ver() {
     setErro(null);
     iniciar(async () => {
-      const r = await preverCampanha({ segmento, meses, procedimentoId, somenteMarketing });
+      const r = await preverCampanha({ segmento, meses, procedimentoId, somenteMarketing, filtros: personalizada ? filtros : undefined });
       if (r.ok) {
         setLista(r.pessoas);
         setFora(new Set());
@@ -81,6 +103,7 @@ export function NovaCampanha({
     iniciar(async () => {
       const r = await criarCampanha({
         segmento, meses, procedimentoId, somenteMarketing, nome, mensagem, limiteDia, iniciaEm,
+        filtros: personalizada ? filtros : undefined,
         pessoas: selecionadas.map((p) => p.pessoa_id),
       });
       if (r.ok) {
@@ -123,6 +146,7 @@ export function NovaCampanha({
         </fieldset>
       ))}
 
+      {!personalizada && (
       <div className="mt-4 rounded-lg bg-fundo px-3.5 py-3">
         <p className="text-sm font-medium">Campanhas de época</p>
         <p className="text-xs text-sutil">Atalhos que preenchem nome e mensagem para quem se interessou por um procedimento. Depois, escolha o procedimento.</p>
@@ -139,6 +163,71 @@ export function NovaCampanha({
           ))}
         </div>
       </div>
+      )}
+
+      {personalizada && (
+        <fieldset className="mt-5 rounded-lg border border-dourado/40 bg-dourado-claro/30 px-3.5 pb-4">
+          <legend className="px-1 text-sm font-medium">Quem entra na sua campanha</legend>
+          <p className="text-xs text-sutil">Deixe em branco o que não quiser filtrar. Depois você ainda pode tirar pessoas da lista.</p>
+          <div className="grid gap-x-3 sm:grid-cols-3">
+            <Campo rotulo="Público">
+              <select value={filtros.publico} onChange={(e) => filtrar({ publico: e.target.value as FiltrosPersonalizada["publico"] })} className={CAMPO}>
+                <option value="todos">Todos</option>
+                <option value="pacientes">Só pacientes</option>
+                <option value="contatos">Só contatos (não vieram)</option>
+              </select>
+            </Campo>
+            <Campo rotulo="Sem vir à clínica há mais de (meses)">
+              <input type="number" min={1} max={120} value={filtros.semVirMeses} onChange={(e) => filtrar({ semVirMeses: e.target.value })} placeholder="Qualquer" className={CAMPO} />
+            </Campo>
+            <div className="grid grid-cols-2 gap-x-2">
+              <Campo rotulo="Idade de">
+                <input type="number" min={0} max={120} value={filtros.idadeMin} onChange={(e) => filtrar({ idadeMin: e.target.value })} placeholder="—" className={CAMPO} />
+              </Campo>
+              <Campo rotulo="até">
+                <input type="number" min={0} max={120} value={filtros.idadeMax} onChange={(e) => filtrar({ idadeMax: e.target.value })} placeholder="—" className={CAMPO} />
+              </Campo>
+            </div>
+            <Campo rotulo="Bairro ou cidade">
+              <input value={filtros.local} onChange={(e) => filtrar({ local: e.target.value })} maxLength={80} placeholder="Ex.: Moema" className={CAMPO} />
+            </Campo>
+            <Campo rotulo="Como conheceu a clínica">
+              <select value={filtros.origemId} onChange={(e) => filtrar({ origemId: e.target.value })} className={CAMPO}>
+                <option value="">Qualquer</option>
+                {origens.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.nome}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+            <Campo rotulo="Com o procedimento escolhido abaixo">
+              <select
+                value={filtros.relacao}
+                onChange={(e) => filtrar({ relacao: e.target.value as FiltrosPersonalizada["relacao"] })}
+                disabled={!procedimentoId}
+                className={CAMPO}
+              >
+                <option value="qualquer">Fez ou se interessou</option>
+                <option value="fez">Já fez</option>
+                <option value="interesse">Se interessou e não fez</option>
+              </select>
+            </Campo>
+          </div>
+          <label className="mt-4 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={filtros.negociacao}
+              onChange={(e) => filtrar({ negociacao: e.target.checked })}
+              className="mt-0.5 size-4 accent-dourado"
+            />
+            <span>
+              Abrir negociação no funil (em “Reativação”)
+              <span className="block text-xs text-sutil">Marque se o objetivo é trazer a pessoa para um tratamento. Sem marcar, só cria o contato do dia com a mensagem.</span>
+            </span>
+          </label>
+        </fieldset>
+      )}
 
       <div className="grid gap-x-3 sm:grid-cols-3">
         {def.rotuloMeses && (
@@ -187,7 +276,9 @@ export function NovaCampanha({
             {lista.length === 0
               ? segmento === "aniversario"
                 ? "Ninguém faz aniversário neste período (ou o parabéns já está programado)."
-                : "Ninguém se encaixa agora (quem não aceita contato, já está negociando ou participou de campanha nos últimos 30 dias fica de fora)."
+                : personalizada
+                  ? "Ninguém se encaixa nesses filtros (quem não aceita contato, já está negociando ou participou de campanha nos últimos 30 dias fica de fora)."
+                  : "Ninguém se encaixa agora (quem não aceita contato, já está negociando ou participou de campanha nos últimos 30 dias fica de fora)."
               : `${selecionadas.length} de ${lista.length} ${lista.length === 1 ? "pessoa selecionada" : "pessoas selecionadas"}`}
           </p>
           {lista.length > 0 && (
@@ -221,7 +312,7 @@ export function NovaCampanha({
       {lista && lista.length > 0 && (
         <>
           <Campo rotulo="Nome da campanha">
-            <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} placeholder="Ex.: Revisão de fim de ano" className={CAMPO} />
+            <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} placeholder={personalizada ? "Ex.: Novos horários aos sábados" : "Ex.: Revisão de fim de ano"} className={CAMPO} />
           </Campo>
           <Campo
             rotulo="Mensagem sugerida"

@@ -1,4 +1,5 @@
-import { Lock } from "lucide-react";
+import { KeyRound, Lock } from "lucide-react";
+import Link from "next/link";
 import {
   EditarLimites,
   EditarRegra,
@@ -16,7 +17,7 @@ import { carregarRegras } from "@/modules/regras/servidor";
 import { Dentistas, type Dentista } from "@/components/configuracoes/dentistas";
 import { RecomecarVersaoTeste } from "@/components/versao-teste";
 import { ambienteTeste } from "@/modules/sessao/ambiente";
-import { exigirSessao } from "@/modules/sessao/sessao";
+import { exigirSessao, loginDeDesenvolvimento } from "@/modules/sessao/sessao";
 
 export const metadata = { title: "Configurações · Instituto CG" };
 
@@ -45,6 +46,14 @@ export default async function Configuracoes() {
         quando e com qual mensagem. Nenhuma mensagem é enviada sozinha — o CRM
         sugere, e você decide quando enviar.
       </p>
+      {!loginDeDesenvolvimento() && (
+        <Link
+          href="/nova-senha"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg border border-borda-forte bg-superficie px-3.5 py-2 text-sm hover:border-dourado"
+        >
+          <KeyRound className="size-4 text-dourado-escuro" /> Alterar minha senha
+        </Link>
+      )}
       {!admin && (
         <p className="mt-4 flex items-center gap-2 rounded-lg bg-fundo px-3.5 py-2.5 text-sm text-suave">
           <Lock className="size-4" /> Somente a administradora altera as regras.

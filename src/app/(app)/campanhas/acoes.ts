@@ -10,12 +10,49 @@ import type { Retorno } from "../hoje/acoes";
 const esquemaFiltro = z.object({
   segmento: z.enum([
     "inativos", "procedimento", "nao_fecharam", "tratamento_pendente", "avaliacao_nao_agendada", "aniversario",
-    "pos_tratamento", "interesse", "desmarcou", "especiais",
+    "pos_tratamento", "interesse", "desmarcou", "especiais", "personalizada",
   ]),
   meses: z.coerce.number({ error: "Informe os meses." }).int().min(1, "Meses entre 1 e 120.").max(120, "Meses entre 1 e 120."),
   procedimentoId: z.union([z.literal(""), z.uuid()]),
   somenteMarketing: z.boolean(),
+  filtros: z
+    .object({
+      publico: z.enum(["todos", "pacientes", "contatos"]),
+      relacao: z.enum(["qualquer", "fez", "interesse"]),
+      semVirMeses: opcional(1, 120, "Meses sem vir entre 1 e 120."),
+      idadeMin: opcional(0, 120, "Idade entre 0 e 120."),
+      idadeMax: opcional(0, 120, "Idade entre 0 e 120."),
+      local: z.string().trim().max(80),
+      origemId: z.union([z.literal(""), z.uuid()]),
+      negociacao: z.boolean(),
+    })
+    .optional(),
 });
+
+/** Número opcional vindo de um campo de texto ("" = sem filtro). */
+function opcional(min: number, max: number, erro: string) {
+  return z
+    .string()
+    .trim()
+    .refine((v) => v === "" || (/^\d+$/.test(v) && Number(v) >= min && Number(v) <= max), erro);
+}
+
+/** Filtros no formato do banco (só os da campanha personalizada). */
+function filtrosDoBanco(f: z.output<typeof esquemaFiltro>) {
+  if (f.segmento !== "personalizada" || !f.filtros) return null;
+  const x = f.filtros;
+  const n = (v: string) => (v === "" ? null : Number(v));
+  return JSON.stringify({
+    publico: x.publico,
+    relacao: x.relacao,
+    sem_vir_meses: n(x.semVirMeses),
+    idade_min: n(x.idadeMin),
+    idade_max: n(x.idadeMax),
+    local: x.local || null,
+    origem_id: x.origemId || null,
+    negociacao: x.negociacao,
+  });
+}
 
 export type Filtro = z.input<typeof esquemaFiltro>;
 
@@ -29,8 +66,8 @@ export async function preverCampanha(filtro: Filtro): Promise<{ ok: true; pessoa
   try {
     const pessoas = await comoUsuaria(sessao.usuarioId, async (db) => {
       const { rows } = await db.query<Destinatario>(
-        "select pessoa_id, nome, detalhe, referencia from public.prever_campanha($1, $2, $3, $4::uuid, $5) limit 500",
-        [sessao.clinicaId, f.segmento, f.meses, f.procedimentoId || null, f.somenteMarketing],
+        "select pessoa_id, nome, detalhe, referencia from public.prever_campanha($1, $2, $3, $4::uuid, $5, $6::jsonb) limit 500",
+        [sessao.clinicaId, f.segmento, f.meses, f.procedimentoId || null, f.somenteMarketing, filtrosDoBanco(f)],
       );
       return rows;
     });
@@ -59,9 +96,9 @@ export async function criarCampanha(dados: DadosCampanha): Promise<Retorno> {
   try {
     const r = await comoUsuaria(sessao.usuarioId, async (db) => {
       const { rows } = await db.query<{ r: { pessoas: number; primeiro_dia: string; ultimo_dia: string } }>(
-        "select public.criar_campanha($1, $2, $3, $4, $5::uuid, $6, $7, $8, $9::date, $10::uuid[]) as r",
+        "select public.criar_campanha($1, $2, $3, $4, $5::uuid, $6, $7, $8, $9::date, $10::uuid[], $11::jsonb) as r",
         [sessao.clinicaId, v.nome, v.segmento, v.meses, v.procedimentoId || null, v.somenteMarketing, v.mensagem,
-         v.limiteDia, v.iniciaEm, v.pessoas],
+         v.limiteDia, v.iniciaEm, v.pessoas, filtrosDoBanco(v)],
       );
       return rows[0].r;
     });

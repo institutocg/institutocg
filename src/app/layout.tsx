@@ -12,6 +12,7 @@ const texto = Inter({ subsets: ["latin"], variable: "--fonte-texto" });
 export const metadata: Metadata = {
   title: "Instituto CG",
   description: "Relacionamento e organização comercial do Instituto CG",
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = { themeColor: "#faf8f4" };
