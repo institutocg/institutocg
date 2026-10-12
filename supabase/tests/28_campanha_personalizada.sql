@@ -28,7 +28,18 @@ insert into public.tratamentos_anteriores (clinica_id, pessoa_id, procedimento_i
 values (testes.v('cp'), testes.v('ana'), testes.proc_cp('Clareamento dental'), testes.hoje() - 400);
 update public.tarefas set status = 'cancelada', cancelada_motivo = 'teste' where clinica_id = testes.v('cp') and status = 'pendente';
 
+insert into public.agendamentos (clinica_id, pessoa_id, tipo, inicio, status, status_em)
+values (testes.v('cp'), testes.v('bia'), 'avaliacao', now() - interval '90 days', 'compareceu', now() - interval '90 days'),
+       (testes.v('cp'), testes.v('bia'), 'procedimento', now() - interval '40 days', 'compareceu', now() - interval '40 days');
+insert into public.prontuarios (clinica_id, pessoa_id) values (testes.v('cp'), testes.v('bia')) on conflict do nothing;
+insert into public.atendimentos (clinica_id, prontuario_id, pessoa_id, data)
+select testes.v('cp'), id, testes.v('bia'), ((now() - interval '40 days') at time zone 'America/Sao_Paulo')::date
+  from public.prontuarios where pessoa_id = testes.v('bia');
+update public.tarefas set status = 'cancelada', cancelada_motivo = 'teste' where clinica_id = testes.v('cp') and status = 'pendente';
+
 reset role; select testes.entrar('dra@pers.local'); set role authenticated;
+select testes.ok(public.vindas(testes.v('bia')) = 2 and public.vindas(testes.v('caio')) = 0,
+  'vindas à clínica: agenda (compareceu) e prontuário, o mesmo dia conta uma vez');
 
 \echo '— Quem entra'
 select testes.ok(testes.quem_cp('{}') = 'Ana Moema, Bia Pinheiros, Caio Contato', 'sem filtro: todos que aceitam contato');

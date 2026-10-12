@@ -103,7 +103,7 @@ select testes.erro(format($$select public.agendar(%L, %L, 'avaliacao', null, %L,
                           testes.v('ag'), testes.v('lia'), testes.quando(5, '18:30'), testes.v('prof')),
   'Fora do horário', 'fora do horário de atendimento (08h–19h)');
 select testes.erro(format($$select public.agendar(%L, %L, 'avaliacao', null, %L, 60, %L)$$,
-                          testes.v('ag'), testes.v('lia'), (date '2026-10-10' + time '10:00') at time zone 'America/Sao_Paulo', testes.v('prof')),
+                          testes.v('ag'), testes.v('lia'), ((testes.hoje() + (6 - extract(isodow from testes.hoje())::int + 7) % 7 + case when extract(isodow from testes.hoje()) = 6 then 7 else 0 end) + time '10:00') at time zone 'America/Sao_Paulo', testes.v('prof')),
   'não atende neste dia', 'sábado: a clínica não atende');
 select testes.erro(format($$select public.agendar(%L, %L, 'avaliacao', null, %L, 60, %L)$$,
                           testes.v('ag'), testes.v('lia'), now() - interval '3 days', testes.v('prof')),
@@ -210,7 +210,7 @@ select testes.ok((select situacao = 'sem_acao' from testes.rec(testes.v('ag_sol'
   'sem nenhuma ação, a desmarcação aparece como "sem ação" (alerta)');
 select public.preparar_dia(testes.v('ag'), true);
 select testes.ok((select situacao = 'a_recuperar' from testes.rec(testes.v('ag_sol')))
-             and (select vence_em = testes.hoje() and prioridade = 'urgente' from testes.pend_ag(testes.v('sol'))),
+             and (select vence_em = public.proximo_dia_util(testes.v('ag'), testes.hoje()) and prioridade = 'urgente' from testes.pend_ag(testes.v('sol'))),
   'a rotina diária recria a recuperação para hoje: nenhuma desmarcação fica sem ação comercial');
 
 -- Desfecho registrado ("não tem interesse"): sai de "a recuperar", com o desfecho visível.

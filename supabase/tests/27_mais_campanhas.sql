@@ -107,8 +107,10 @@ select testes.ok(testes.quem('interesse', 12, testes.proc_mc('Clareamento dental
   'interesse em clareamento: quem se interessou e não fez (quem já fez fica de fora)');
 select testes.ok(testes.quem('desmarcou', 2) = 'Dora Desmarcou', 'desmarcou há mais de 2 meses e nunca remarcou');
 select testes.ok(testes.quem('especiais', 12) = 'Especial 4, Especial 5', 'especiais: os 30% com maior histórico');
-select testes.erro($$select * from public.prever_campanha(testes.v('mc'), 'interesse', 12)$$, 'Escolha o procedimento',
-  'interesse exige o procedimento');
+select testes.ok(testes.quem('interesse', 12) = 'Tito Recente, Tânia Pendente, Téo Agendado, Ávila Sem Avaliação',
+  'interesse sem escolher procedimento: todos que se interessaram (negociação, orçamento ou plano) e não fizeram');
+select testes.ok((select bool_and(procedimento is not null) from public.prever_campanha(testes.v('mc'), 'interesse', 12)),
+  'cada pessoa vem com o procedimento de interesse dela (para a mensagem)');
 
 \echo '— Criar: relacionamento só cria tarefa; vendas abre negociação'
 select set_config('t.r', public.criar_campanha(testes.v('mc'), 'Parabéns', 'aniversario', 1, null, false,

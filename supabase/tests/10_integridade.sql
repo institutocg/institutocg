@@ -231,7 +231,9 @@ select testes.ok((
      and c.responsavel = 'Júlia' and c.origem = 'Instagram'
   from public.v_contatos c where c.id = testes.v('maria')),
   'contato mostra status, etapa atual, procedimento de interesse, próxima ação e data');
-select testes.ok((select count(*) from public.v_painel_tarefas where pessoa_id = testes.v('maria')) = 2,
+-- Em feriado/fim de semana o primeiro contato automático fica para o próximo dia útil.
+select testes.ok((select count(*) from public.v_painel_tarefas where pessoa_id = testes.v('maria'))
+                 = case when public.eh_dia_util(testes.v('c1'), testes.hoje()) then 2 else 1 end,
   'tarefa do dia aparece no painel (a manual + o primeiro contato criado automaticamente)');
 
 select testes.erro(

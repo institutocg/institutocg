@@ -68,6 +68,7 @@ test("campanha de reativação: prévia, lista editável e contatos distribuído
   await entrar(page, "dona@institutocg.local");
   await menu(page).getByRole("link", { name: "Campanhas" }).click();
   await expect(page.getByText("Nenhuma campanha ainda.")).toBeVisible();
+  await page.getByRole("radio", { name: /Não vem à clínica há um tempo/ }).click();
   await page.getByRole("button", { name: "Ver quem entra" }).click();
   const lista = page.getByRole("list", { name: "Pessoas da campanha" });
   await expect(lista.getByRole("checkbox")).toHaveCount(2); // Paulo (pagamento em atraso) fica de fora

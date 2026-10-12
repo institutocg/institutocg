@@ -1101,9 +1101,11 @@ Na tela **Campanhas**, os tipos aparecem em dois grupos:
 - **Campanhas de época**: atalhos "Sorriso para as festas", "Noivas e formaturas" e "Começo de ano", que preenchem nome e mensagem; escolhe-se o procedimento.
 - Todas as mensagens são sem preço, desconto ou promoção (publicidade odontológica) e continuam respeitando consentimento, intervalo entre contatos, negociações em andamento e pagamentos em atraso.
 
-## 14.13 Campanha personalizada (implementado)
+## 14.13 Campanhas: tipos escolhidos e “Criar a minha campanha” (implementado)
 
-Além dos tipos prontos, a administradora monta a campanha: segmento `personalizada` com filtros opcionais (público pacientes/contatos/todos, procedimento que fez ou se interessou, sem vir há X meses, faixa de idade, bairro/cidade, como conheceu). Os filtros ficam em `campanhas.filtros`. Por padrão só cria o contato do dia (como as de relacionamento); marcando “Abrir negociação”, abre em Reativação. Valem as regras de sempre (consentimento, sem negociação aberta, 30 dias entre campanhas, sem contato recente, sem atraso).
+A tela de nova campanha mostra só: *Demonstrou interesse e não fez* (procedimento opcional), *Não vem à clínica há um tempo*, *Quem fez um procedimento*, *Aniversário (no dia)*, *Avaliação no Google e indicação*, *Pacientes especiais* e **Criar a minha campanha**. Os outros segmentos continuam no banco (histórico das campanhas antigas) com `oculto: true` em `SEGMENTOS`.
+
+“Criar a minha campanha” (segmento `personalizada`) não tem filtros obrigatórios: a administradora escreve nome, público-alvo, oferta (`{{oferta}}`, trocada antes de gravar) e mensagem, e marca os pacientes numa lista com busca e organização opcionais (vindas à clínica, próximo aniversário, há mais tempo sem vir; aniversariantes do mês; mínimo de vindas). Público-alvo e oferta ficam em `campanhas.filtros`. Só cria o contato do dia, sem negociação no funil. A lista já exclui quem não pode receber campanha (regras de sempre).
 
 ## 14.14 Versão oficial (implementado)
 

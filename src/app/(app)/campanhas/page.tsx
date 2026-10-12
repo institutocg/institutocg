@@ -31,10 +31,6 @@ export default async function Campanhas() {
       "select id, nome from public.procedimentos where clinica_id = $1 and ativo order by ordem, nome",
       [sessao.clinicaId],
     );
-    const origens = await db.query<{ id: string; nome: string }>(
-      "select id, nome from public.origens where clinica_id = $1 and ativo order by ordem, nome",
-      [sessao.clinicaId],
-    );
     const extra = await db.query<{ hoje: string; limite: number }>(
       `select public.hoje_clinica(id) as hoje, coalesce((configuracoes ->> 'limite_reativacao_dia')::int, 10) as limite
            from public.clinicas where id = $1`,
@@ -43,7 +39,6 @@ export default async function Campanhas() {
     return {
       campanhas: campanhas.rows,
       procedimentos: procedimentos.rows,
-      origens: origens.rows,
       ...extra.rows[0],
     };
   });
@@ -62,7 +57,6 @@ export default async function Campanhas() {
           {admin ? (
             <NovaCampanha
               procedimentos={dados.procedimentos}
-              origens={dados.origens}
               hoje={dados.hoje}
               limitePadrao={dados.limite}
             />

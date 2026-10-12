@@ -18,6 +18,8 @@ export interface DefSegmento {
   rotulo: string;
   ajuda: string;
   grupo: "personalizada" | "vendas" | "relacionamento";
+  /** Fora da tela de nova campanha (só aparece no histórico das campanhas antigas). */
+  oculto?: boolean;
   /** Rótulo do campo de meses; null = não usa (ex.: especiais). */
   rotuloMeses: string | null;
   mesesPadrao: number;
@@ -28,15 +30,16 @@ export interface DefSegmento {
 // Mensagens sem preço, desconto ou promoção (regras de publicidade odontológica).
 export const SEGMENTOS: Record<Segmento, DefSegmento> = {
   personalizada: {
-    rotulo: "Campanha personalizada",
-    ajuda: "Você escolhe quem entra: pacientes ou contatos, procedimento, tempo sem vir, idade, bairro…",
+    rotulo: "Criar a minha campanha",
+    ajuda: "Do seu jeito: você escreve o público, a oferta e a mensagem, e escolhe os pacientes.",
     grupo: "personalizada",
     rotuloMeses: null,
     mesesPadrao: 1,
-    procedimento: "opcional",
-    mensagem: "Olá, {{nome}}! Tudo bem? Aqui é do {{clinica}}. ",
+    procedimento: "nao",
+    mensagem: "Olá, {{nome}}! Tudo bem? Aqui é do {{clinica}}. {{oferta}}",
   },
   tratamento_pendente: {
+    oculto: true,
     rotulo: "Tratamento pendente",
     ajuda: "Procedimentos pendentes no plano e nenhuma consulta marcada. Quem já aceitou (e às vezes já pagou).",
     grupo: "relacionamento",
@@ -47,6 +50,7 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
       "Olá, {{nome}}! Tudo bem? Passando para lembrar que ainda temos a continuidade do seu tratamento ({{procedimento}}). Quando fica melhor para você? Posso reservar um horário.",
   },
   avaliacao_nao_agendada: {
+    oculto: true,
     rotulo: "Avaliação que não aconteceu",
     ajuda: "Demonstraram interesse, mas nunca chegaram a marcar a avaliação.",
     grupo: "vendas",
@@ -57,8 +61,8 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
       "Olá, {{nome}}! Tudo bem? Há um tempo você conversou com a gente sobre o seu sorriso. Se ainda fizer sentido, podemos marcar uma avaliação para entender o que você deseja — sem compromisso.",
   },
   aniversario: {
-    rotulo: "Aniversário",
-    ajuda: "Parabéns no dia, sem nenhuma oferta. Só relacionamento.",
+    rotulo: "Aniversário (no dia)",
+    ajuda: "Parabéns no dia do aniversário, sem nenhuma oferta. Só relacionamento.",
     grupo: "relacionamento",
     rotuloMeses: "Aniversários nos próximos (meses)",
     mesesPadrao: 1,
@@ -76,16 +80,17 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
       "Olá, {{nome}}! Como você está se sentindo com o resultado do seu {{procedimento}}? Se puder, sua avaliação no Google ajuda muito outras pessoas a nos conhecerem: [cole aqui o link de avaliação]. E se alguém próximo quiser cuidar do sorriso, será um prazer receber!",
   },
   interesse: {
-    rotulo: "Quem se interessou por um procedimento",
-    ajuda: "Para campanhas de época: interessados que ainda não fizeram.",
+    rotulo: "Demonstrou interesse e não fez",
+    ajuda: "Se interessou por um procedimento (conversa, orçamento ou plano) e não realizou nem fechou.",
     grupo: "vendas",
     rotuloMeses: "Interesse nos últimos (meses)",
     mesesPadrao: 12,
-    procedimento: "obrigatorio",
+    procedimento: "opcional",
     mensagem:
       "Olá, {{nome}}! Tudo bem? Lembrei de você, que tinha interesse em {{procedimento}}. Se quiser retomar, posso reservar um horário para conversarmos.",
   },
   desmarcou: {
+    oculto: true,
     rotulo: "Desmarcou e não remarcou",
     ajuda: "Desmarcou ou faltou há meses e a recuperação não deu certo. Uma nova tentativa, com calma.",
     grupo: "vendas",
@@ -106,8 +111,8 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
       "Olá, {{nome}}! Tudo bem? Você faz parte da história do {{clinica}} e queríamos agradecer pela confiança. Sempre que precisar, estamos aqui — será um prazer receber você.",
   },
   inativos: {
-    rotulo: "Pacientes sem atendimento",
-    ajuda: "Pacientes antigos que não vêm à clínica há alguns meses.",
+    rotulo: "Não vem à clínica há um tempo",
+    ajuda: "Pacientes que não vêm à clínica há alguns meses.",
     grupo: "vendas",
     rotuloMeses: "Sem atendimento há mais de (meses)",
     mesesPadrao: 6,
@@ -126,6 +131,7 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
       "Olá, {{nome}}! Já faz um tempo desde o seu {{procedimento}}. Que tal agendarmos uma revisão para manter o resultado?",
   },
   nao_fecharam: {
+    oculto: true,
     rotulo: "Quem não fechou",
     ajuda: "Negociações encerradas há alguns meses. Muitos voltam quando o momento muda.",
     grupo: "vendas",
@@ -138,64 +144,30 @@ export const SEGMENTOS: Record<Segmento, DefSegmento> = {
 };
 
 export const GRUPOS_SEGMENTO: { id: DefSegmento["grupo"]; titulo: string; ajuda: string }[] = [
-  { id: "personalizada", titulo: "Do seu jeito", ajuda: "Monte a sua própria campanha com os filtros que quiser." },
   { id: "vendas", titulo: "Trazer de volta", ajuda: "Abrem a negociação em “Reativação” no funil." },
   { id: "relacionamento", titulo: "Relacionamento e cuidado", ajuda: "Só criam o contato do dia com a mensagem; não mexem no funil." },
+  { id: "personalizada", titulo: "Do seu jeito", ajuda: "Uma campanha criada por você, para quem você escolher." },
 ];
 
-/** Campanhas de época: atalhos que preenchem nome e mensagem (escolha o procedimento). */
-export const EPOCAS: { id: string; nome: string; quando: string; mensagem: string }[] = [
-  {
-    id: "festas",
-    nome: "Sorriso para as festas",
-    quando: "outubro e novembro",
-    mensagem:
-      "Olá, {{nome}}! As festas de fim de ano estão chegando. Se ainda tiver vontade de fazer o {{procedimento}}, dá tempo de planejar com calma. Quer que eu veja um horário?",
-  },
-  {
-    id: "eventos",
-    nome: "Noivas e formaturas",
-    quando: "o ano todo",
-    mensagem:
-      "Olá, {{nome}}! Tem algum evento especial chegando — casamento, formatura? Se quiser chegar com o sorriso do jeito que sonha, podemos planejar o {{procedimento}} com antecedência.",
-  },
-  {
-    id: "ano-novo",
-    nome: "Começo de ano",
-    quando: "janeiro e fevereiro",
-    mensagem:
-      "Olá, {{nome}}! Ano novo, novos planos 😊 Se cuidar do sorriso estiver na sua lista, podemos retomar a conversa sobre {{procedimento}}.",
-  },
+/** Ordem dos tipos na tela de nova campanha. */
+export const ORDEM_SEGMENTOS: Segmento[] = [
+  "interesse", "inativos", "procedimento", "aniversario", "pos_tratamento", "especiais", "personalizada",
 ];
 
-/** Filtros da campanha personalizada (todos opcionais). */
-export interface FiltrosPersonalizada {
-  publico: "todos" | "pacientes" | "contatos";
-  relacao: "qualquer" | "fez" | "interesse";
-  semVirMeses: string;
-  idadeMin: string;
-  idadeMax: string;
-  local: string;
-  origemId: string;
-  negociacao: boolean;
+/** Troca {{oferta}} pelo texto da oferta (campanha criada por ela). */
+export function comOferta(mensagem: string, oferta: string): string {
+  return mensagem.replaceAll("{{oferta}}", oferta.trim()).replace(/[ \t]+$/gm, "").trim();
 }
-
-export const FILTROS_VAZIOS: FiltrosPersonalizada = {
-  publico: "todos",
-  relacao: "qualquer",
-  semVirMeses: "",
-  idadeMin: "",
-  idadeMax: "",
-  local: "",
-  origemId: "",
-  negociacao: false,
-};
 
 export interface Destinatario {
   pessoa_id: string;
   nome: string;
   detalhe: string;
   referencia: string | null;
+  /** Só na campanha criada por ela: para escolher quem entra. */
+  vindas?: number;
+  nascimento?: string | null;
+  ultima_vinda?: string | null;
 }
 
 export interface CampanhaResumo {

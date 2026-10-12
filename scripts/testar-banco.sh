@@ -92,19 +92,21 @@ grep -q "email-da-dra-cristina@exemplo.com" "$RAIZ/supabase/producao/equipe.sql"
   && ! (echo "select 1" | "${OFI[@]}" -f "$RAIZ/supabase/producao/equipe.sql" >/dev/null 2>&1) \
   && echo "  ok - equipe.sql sem trocar os e-mails avisa que o login não existe"
 
-echo "→ Atualização da versão de teste (atualizar-seguranca-e-campanha-personalizada.sql)"
+echo "→ Atualizações da versão de teste (sobre a versão anterior)"
 "${PSQL[@]}" -c "create database atualizacao" >/dev/null
 ATU=(psql -h "$DADOS" -p "$PORTA" -U postgres -d atualizacao -v ON_ERROR_STOP=1 -q -X)
 "${ATU[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase_real.sql"
 for arquivo in "$RAIZ"/supabase/migrations/*.sql; do
-  case "$(basename "$arquivo")" in 20261009120000_*|20261010120000_*) continue ;; esac
+  case "$(basename "$arquivo")" in 20261009120000_*|20261010120000_*|20261012120000_*) continue ;; esac
   "${ATU[@]}" -f "$arquivo" >/dev/null
 done
 "${ATU[@]}" -f "$RAIZ/supabase/seed.sql" >/dev/null
 "${ATU[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-seguranca-e-campanha-personalizada.sql" >/dev/null
+"${ATU[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-campanhas-simples.sql" >/dev/null
 [ "$("${ATU[@]}" -At -c "select public.ambiente_teste() and (select count(*) from public.pessoas) > 10
     and not has_function_privilege('anon', 'public.prever_campanha(uuid, text, int, uuid, boolean, jsonb)', 'execute')
-    and has_function_privilege('authenticated', 'public.prever_campanha(uuid, text, int, uuid, boolean, jsonb)', 'execute')")" = "t" ] \
+    and has_function_privilege('authenticated', 'public.prever_campanha(uuid, text, int, uuid, boolean, jsonb)', 'execute')
+    and has_function_privilege('authenticated', 'public.vindas(uuid)', 'execute')")" = "t" ] \
   || { echo "FALHOU: atualização da versão de teste" >&2; exit 1; }
 echo "  ok - aplica sobre a versão de teste anterior sem perder os dados"
 

@@ -11,17 +11,16 @@ async function entrar(page: Page) {
   await page.waitForURL(/\/hoje$/);
 }
 
-test("os tipos de campanha aparecem nos grupos", async ({ page }) => {
+test("só os tipos escolhidos aparecem, em três grupos", async ({ page }) => {
   await entrar(page);
   await page.goto("/campanhas");
   const vendas = page.getByRole("radiogroup", { name: "Trazer de volta" });
   const rel = page.getByRole("radiogroup", { name: "Relacionamento e cuidado" });
-  for (const r of ["Avaliação que não aconteceu", "Quem se interessou por um procedimento", "Desmarcou e não remarcou", "Pacientes sem atendimento"]) {
-    await expect(vendas.getByRole("radio", { name: new RegExp(r) })).toBeVisible();
-  }
-  for (const r of ["Tratamento pendente", "Aniversário", "Avaliação no Google e indicação", "Pacientes especiais"]) {
-    await expect(rel.getByRole("radio", { name: new RegExp(r) })).toBeVisible();
-  }
+  const meu = page.getByRole("radiogroup", { name: "Do seu jeito" });
+  await expect(vendas.getByRole("radio")).toHaveText([/Demonstrou interesse e não fez/, /Não vem à clínica há um tempo/, /Quem fez um procedimento/]);
+  await expect(rel.getByRole("radio")).toHaveText([/Aniversário \(no dia\)/, /Avaliação no Google e indicação/, /Pacientes especiais/]);
+  await expect(meu.getByRole("radio")).toHaveText([/Criar a minha campanha/]);
+  await expect(page.getByText("Campanhas de época")).toHaveCount(0);
 });
 
 test("aniversário: parabéns programado para o dia, sem oferta", async ({ page }) => {
@@ -39,34 +38,34 @@ test("aniversário: parabéns programado para o dia, sem oferta", async ({ page 
   await expect(page.getByRole("status").filter({ hasText: "Campanha criada: 2 contatos programados" })).toBeVisible();
 });
 
-test("campanha de época preenche nome e mensagem e pede o procedimento", async ({ page }) => {
+test("interesse: o procedimento é opcional", async ({ page }) => {
   await entrar(page);
   await page.goto("/campanhas");
-  await page.getByRole("button", { name: /Sorriso para as festas/ }).click();
-  await expect(page.getByRole("radio", { name: /Quem se interessou por um procedimento/ })).toHaveAttribute("aria-checked", "true");
-  await page.getByRole("button", { name: "Ver quem entra" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Escolha o procedimento." })).toBeVisible();
-  await page.getByRole("combobox", { name: /^Procedimento/ }).selectOption({ label: "Facetas de porcelana" });
+  await page.getByRole("radio", { name: /Demonstrou interesse e não fez/ }).click();
+  await expect(page.getByRole("combobox", { name: /^Procedimento \(opcional\)/ })).toHaveValue("");
   await page.getByRole("button", { name: "Ver quem entra" }).click();
   await expect(page.getByText(/pessoas? selecionadas?|Ninguém se encaixa/)).toBeVisible();
 });
 
-test("campanha personalizada: ela escolhe os filtros e cria", async ({ page }) => {
+test("criar a minha campanha: escreve tudo e escolhe os pacientes", async ({ page }) => {
   await entrar(page);
   await page.goto("/campanhas");
-  await page.getByRole("radio", { name: /^Campanha personalizada/ }).click();
-  await page.getByLabel("Idade de").fill("119");
-  await page.getByRole("button", { name: "Ver quem entra" }).click();
-  await expect(page.getByText("Ninguém se encaixa nesses filtros")).toBeVisible();
+  await page.getByRole("radio", { name: /Criar a minha campanha/ }).click();
+  await page.getByLabel("Nome da campanha").fill("Indique um amigo");
+  await page.getByLabel("Público-alvo").fill("Pacientes que vieram mais de 3 vezes");
+  await page.getByLabel("Oferta (opcional)").fill("Indique um amigo e ganhe um mimo especial.");
+  await expect(page.getByText(/Prévia · .*Indique um amigo e ganhe um mimo especial\./)).toBeVisible();
 
-  await page.getByLabel("Idade de").fill("");
-  await page.getByLabel("Público").selectOption({ label: "Só pacientes" });
-  await page.getByRole("button", { name: "Ver quem entra" }).click();
-  const lista = page.getByRole("list", { name: "Pessoas da campanha" });
-  await expect(lista.getByRole("listitem").first()).toContainText("Paciente");
-  await page.getByLabel("Nome da campanha").fill("Novos horários");
-  await page.getByLabel("Mensagem sugerida").fill("Olá, {{nome}}! Agora atendemos também aos sábados. Quer agendar?");
+  const lista = page.getByRole("list", { name: "Pacientes para escolher" });
+  await expect(lista.getByRole("listitem").first()).toBeVisible();
+  await expect(page.getByText("0 pacientes escolhidos")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Criar campanha" })).toBeDisabled();
+
+  await page.getByLabel("Organizar por").selectOption({ label: "Mais vindas à clínica" });
+  await lista.getByRole("checkbox").first().check();
+  await lista.getByRole("checkbox").nth(1).check();
+  await expect(page.getByText("2 pacientes escolhidos")).toBeVisible();
   await page.getByRole("button", { name: "Criar campanha" }).click();
-  await expect(page.getByRole("status").filter({ hasText: /Campanha criada: \d+ contatos? programados?/ })).toBeVisible();
-  await expect(page.getByText("Novos horários").first()).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Campanha criada: 2 contatos programados" })).toBeVisible();
+  await expect(page.getByText("Indique um amigo").first()).toBeVisible();
 });

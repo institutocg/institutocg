@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { comoUsuaria, mensagemDeErro } from "@/lib/db";
-import type { Destinatario } from "@/modules/campanhas/campanhas";
+import { comOferta, type Destinatario } from "@/modules/campanhas/campanhas";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import type { Retorno } from "../hoje/acoes";
 
@@ -15,43 +15,12 @@ const esquemaFiltro = z.object({
   meses: z.coerce.number({ error: "Informe os meses." }).int().min(1, "Meses entre 1 e 120.").max(120, "Meses entre 1 e 120."),
   procedimentoId: z.union([z.literal(""), z.uuid()]),
   somenteMarketing: z.boolean(),
-  filtros: z
-    .object({
-      publico: z.enum(["todos", "pacientes", "contatos"]),
-      relacao: z.enum(["qualquer", "fez", "interesse"]),
-      semVirMeses: opcional(1, 120, "Meses sem vir entre 1 e 120."),
-      idadeMin: opcional(0, 120, "Idade entre 0 e 120."),
-      idadeMax: opcional(0, 120, "Idade entre 0 e 120."),
-      local: z.string().trim().max(80),
-      origemId: z.union([z.literal(""), z.uuid()]),
-      negociacao: z.boolean(),
-    })
-    .optional(),
 });
 
-/** Número opcional vindo de um campo de texto ("" = sem filtro). */
-function opcional(min: number, max: number, erro: string) {
-  return z
-    .string()
-    .trim()
-    .refine((v) => v === "" || (/^\d+$/.test(v) && Number(v) >= min && Number(v) <= max), erro);
-}
-
-/** Filtros no formato do banco (só os da campanha personalizada). */
-function filtrosDoBanco(f: z.output<typeof esquemaFiltro>) {
-  if (f.segmento !== "personalizada" || !f.filtros) return null;
-  const x = f.filtros;
-  const n = (v: string) => (v === "" ? null : Number(v));
-  return JSON.stringify({
-    publico: x.publico,
-    relacao: x.relacao,
-    sem_vir_meses: n(x.semVirMeses),
-    idade_min: n(x.idadeMin),
-    idade_max: n(x.idadeMax),
-    local: x.local || null,
-    origem_id: x.origemId || null,
-    negociacao: x.negociacao,
-  });
+/** Campanha criada por ela: o público e a oferta ficam guardados junto (só texto). */
+function filtrosDoBanco(segmento: string, publicoAlvo?: string, oferta?: string) {
+  if (segmento !== "personalizada") return null;
+  return JSON.stringify({ publico_alvo: publicoAlvo?.trim() || null, oferta: oferta?.trim() || null });
 }
 
 export type Filtro = z.input<typeof esquemaFiltro>;
@@ -62,12 +31,25 @@ export async function preverCampanha(filtro: Filtro): Promise<{ ok: true; pessoa
   const lido = esquemaFiltro.safeParse(filtro);
   if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
   const f = lido.data;
-  if ((f.segmento === "procedimento" || f.segmento === "interesse") && !f.procedimentoId) return { ok: false, erro: "Escolha o procedimento." };
+  if (f.segmento === "procedimento" && !f.procedimentoId) return { ok: false, erro: "Escolha o procedimento." };
   try {
     const pessoas = await comoUsuaria(sessao.usuarioId, async (db) => {
+      if (f.segmento === "personalizada") {
+        // Todos que aceitam contato, com o que ajuda a escolher: vindas, aniversário e última vinda.
+        const { rows } = await db.query<Destinatario>(
+          `select c.pessoa_id, c.nome, c.detalhe, c.referencia, public.vindas(c.pessoa_id) as vindas,
+                  p.data_nascimento as nascimento, v.ultimo_atendimento_em as ultima_vinda
+             from public.prever_campanha($1, 'personalizada', 1, null, $2, null) c
+             join public.pessoas p on p.id = c.pessoa_id
+             join public.v_contatos v on v.id = c.pessoa_id
+            order by c.nome limit 3000`,
+          [sessao.clinicaId, f.somenteMarketing],
+        );
+        return rows;
+      }
       const { rows } = await db.query<Destinatario>(
-        "select pessoa_id, nome, detalhe, referencia from public.prever_campanha($1, $2, $3, $4::uuid, $5, $6::jsonb) limit 500",
-        [sessao.clinicaId, f.segmento, f.meses, f.procedimentoId || null, f.somenteMarketing, filtrosDoBanco(f)],
+        "select pessoa_id, nome, detalhe, referencia from public.prever_campanha($1, $2, $3, $4::uuid, $5) limit 500",
+        [sessao.clinicaId, f.segmento, f.meses, f.procedimentoId || null, f.somenteMarketing],
       );
       return rows;
     });
@@ -83,6 +65,8 @@ const esquemaCampanha = esquemaFiltro.extend({
   limiteDia: z.coerce.number().int().min(1, "Limite entre 1 e 50 por dia.").max(50, "Limite entre 1 e 50 por dia."),
   iniciaEm: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Escolha a data de início."),
   pessoas: z.array(z.uuid()).min(1, "Selecione ao menos uma pessoa."),
+  publicoAlvo: z.string().trim().max(200).optional(),
+  oferta: z.string().trim().max(300).optional(),
 });
 
 export type DadosCampanha = z.input<typeof esquemaCampanha>;
@@ -93,12 +77,13 @@ export async function criarCampanha(dados: DadosCampanha): Promise<Retorno> {
   const lido = esquemaCampanha.safeParse(dados);
   if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
   const v = lido.data;
+  const mensagem = comOferta(v.mensagem, v.oferta ?? "");
   try {
     const r = await comoUsuaria(sessao.usuarioId, async (db) => {
       const { rows } = await db.query<{ r: { pessoas: number; primeiro_dia: string; ultimo_dia: string } }>(
         "select public.criar_campanha($1, $2, $3, $4, $5::uuid, $6, $7, $8, $9::date, $10::uuid[], $11::jsonb) as r",
-        [sessao.clinicaId, v.nome, v.segmento, v.meses, v.procedimentoId || null, v.somenteMarketing, v.mensagem,
-         v.limiteDia, v.iniciaEm, v.pessoas, filtrosDoBanco(v)],
+        [sessao.clinicaId, v.nome, v.segmento, v.meses, v.procedimentoId || null, v.somenteMarketing, mensagem,
+         v.limiteDia, v.iniciaEm, v.pessoas, filtrosDoBanco(v.segmento, v.publicoAlvo, v.oferta)],
       );
       return rows[0].r;
     });
