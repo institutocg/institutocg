@@ -114,4 +114,24 @@ git -C "$RAIZ" show c95057f:supabase/seed.sql | "${ATU[@]}" >/dev/null
   || { echo "FALHOU: atualização da versão de teste" >&2; exit 1; }
 echo "  ok - aplica sobre a versão de teste anterior sem perder os dados"
 
+echo "→ Atualização da versão de teste num arquivo só (atualizar-tudo.sql)"
+"$RAIZ/scripts/gerar-atualizacao-teste.sh" --conferir
+"${PSQL[@]}" -c "create database tudo" >/dev/null
+TUD=(psql -h "$DADOS" -p "$PORTA" -U postgres -d tudo -v ON_ERROR_STOP=1 -q -X)
+"${TUD[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase_real.sql"
+for arquivo in "$RAIZ"/supabase/migrations/*.sql; do
+  case "$(basename "$arquivo")" in 20261009120000_*|20261010120000_*|20261012120000_*|20261013120000_*) continue ;; esac
+  "${TUD[@]}" -f "$arquivo" >/dev/null
+done
+git -C "$RAIZ" show c95057f:supabase/seed.sql | "${TUD[@]}" >/dev/null
+ANTES="$("${TUD[@]}" -At -c "select count(*) from public.pessoas")"
+for _ in 1 2; do "${TUD[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-tudo.sql" >/dev/null 2>&1 \
+  || { echo "FALHOU: atualizar-tudo.sql" >&2; "${TUD[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-tudo.sql" >&2; exit 1; }; done
+[ "$("${TUD[@]}" -At -c "select (select count(*) from public.pessoas) = $ANTES and public.ambiente_teste()
+    and to_regclass('public.receitas') is not null and to_regprocedure('public.vindas(uuid)') is not null
+    and exists (select 1 from information_schema.columns where table_name = 'campanhas' and column_name = 'filtros')
+    and not has_function_privilege('anon', 'public.criar_receita(uuid, uuid, text, int, date, jsonb, text, uuid, text)', 'execute')")" = "t" ] \
+  || { echo "FALHOU: atualizar-tudo.sql não deixou o banco atualizado" >&2; exit 1; }
+echo "  ok - um arquivo só: aplica sobre a versão anterior, colar de novo não dá erro, nenhum dado perdido"
+
 echo "✓ Banco de dados verificado."
