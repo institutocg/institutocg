@@ -67,5 +67,7 @@ export function mensagemDeErro(erro: unknown): string {
   if (e?.code === "23505") return "Este registro já existe.";
   if (e?.code === "23514" || e?.code === "23503") return "Não foi possível salvar: algum dado está inconsistente.";
   console.error(erro);
-  return "Não foi possível concluir agora. Tente novamente em instantes.";
+  // Detalhe curto para quem for ajudar a resolver (não há dado de paciente nas mensagens do banco).
+  const detalhe = [e?.code, e?.message?.split("\n")[0].slice(0, 160)].filter(Boolean).join(" · ");
+  return `Não foi possível concluir agora. Tente novamente em instantes.${detalhe ? ` (detalhe: ${detalhe})` : ""}`;
 }
