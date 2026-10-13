@@ -217,7 +217,16 @@ begin
                              (select id from public.motivos where clinica_id = c and nome = 'Valor alto'));
 
   -- Dentistas (fictícias): a dona da clínica e mais duas.
-  update public.profissionais set nome = 'Dra. Cristina' where id = prof;
+  update public.profissionais set nome = 'Dra. Cristina', cro = 'CRO-SP 00000', especialidade = 'Cirurgiã-dentista' where id = prof;
+  -- Receituário (fictício): cabeçalho/rodapé e um modelo pronto.
+  update public.clinicas set configuracoes = configuracoes || jsonb_build_object('receituario', jsonb_build_object(
+    'endereco', 'Rua Exemplo, 100 — sala 12 — Jardins', 'telefone', '(11) 0000-0000',
+    'cidade', 'São Paulo - SP', 'rodape', '@institutocg')) where id = c;
+  insert into public.receita_modelos (clinica_id, nome, tipo, itens, orientacoes) values
+    (c, 'Pós-extração (exemplo)', 'simples',
+     '[{"medicamento": "Dipirona 500 mg", "quantidade": "10 comprimidos", "uso": "oral", "posologia": "Tomar 1 comprimido de 6 em 6 horas, se houver dor."},
+       {"medicamento": "Digluconato de clorexidina 0,12%", "quantidade": "1 frasco", "uso": "topico", "posologia": "Bochechar 15 ml por 1 minuto, de 12 em 12 horas, por 7 dias, a partir do dia seguinte."}]',
+     'Exemplo da versão de teste — confira e ajuste antes de usar. Evitar alimentos quentes e esforço físico nas primeiras 24 horas.');
   insert into public.profissionais (clinica_id, nome, cor) values
     (c, 'Dra. Paula Reis', '#5F8A6A'),
     (c, 'Dra. Lívia Moraes', '#7A6FA8');

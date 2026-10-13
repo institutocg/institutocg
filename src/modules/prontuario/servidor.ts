@@ -2,6 +2,7 @@ import "server-only";
 import type { PoolClient } from "pg";
 import type { ParcelaFin } from "@/modules/financeiro/financeiro";
 import type { DataCivil } from "@/lib/datas";
+import type { DadosReceituario, ModeloReceita, Receita } from "@/modules/receitas/receitas";
 import type { ItemPlano, ResumoConsulta } from "./prontuario";
 
 type Db = PoolClient;
@@ -135,4 +136,40 @@ export async function carregarPagamentoPlano(db: Db, pessoaId: string, podeVerFi
     [plano],
   );
   return { planoId: plano, situacao, parcelas: parcelas.rows };
+}
+
+export async function carregarReceitas(db: Db, pessoaId: string): Promise<Receita[]> {
+  const { rows } = await db.query<Receita>(
+    "select * from public.v_receitas where pessoa_id = $1 order by data desc, criado_em desc",
+    [pessoaId],
+  );
+  return rows;
+}
+
+export async function carregarReceita(db: Db, id: string): Promise<Receita | null> {
+  const { rows } = await db.query<Receita>("select * from public.v_receitas where id = $1", [id]);
+  return rows[0] ?? null;
+}
+
+export async function carregarModelosReceita(db: Db, clinicaId: string): Promise<ModeloReceita[]> {
+  const { rows } = await db.query<ModeloReceita>(
+    "select id, nome, tipo, itens, orientacoes from public.receita_modelos where clinica_id = $1 order by nome",
+    [clinicaId],
+  );
+  return rows;
+}
+
+export async function carregarDadosReceituario(db: Db, clinicaId: string): Promise<{ clinica: string } & DadosReceituario> {
+  const { rows } = await db.query<{ clinica: string; r: Partial<DadosReceituario> | null }>(
+    "select nome as clinica, configuracoes -> 'receituario' as r from public.clinicas where id = $1",
+    [clinicaId],
+  );
+  const r = rows[0]?.r ?? {};
+  return {
+    clinica: rows[0]?.clinica ?? "",
+    endereco: r.endereco ?? null,
+    telefone: r.telefone ?? null,
+    cidade: r.cidade ?? null,
+    rodape: r.rodape ?? null,
+  };
 }

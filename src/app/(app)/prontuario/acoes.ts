@@ -181,3 +181,61 @@ export async function registrarPagamentoDoPlano(dados: z.input<typeof esquemaPag
     return { ok: false, erro: mensagemDeErro(erro) };
   }
 }
+
+const esquemaReceita = z.object({
+  pessoaId: z.uuid(),
+  atendimentoId: z.union([z.literal(""), z.uuid()]),
+  profissionalId: z.uuid({ error: "Escolha a dentista que assina a receita." }),
+  tipo: z.enum(["simples", "controle_especial"]),
+  vias: z.union([z.literal(1), z.literal(2)]),
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Escolha a data da receita."),
+  itens: z
+    .array(
+      z.object({
+        medicamento: z.string().trim().max(120, "Nome do medicamento muito longo."),
+        quantidade: z.string().trim().max(60, "Quantidade muito longa."),
+        uso: z.enum(["oral", "topico", "sublingual", "externo"]),
+        posologia: z.string().trim().max(500, "Modo de usar muito longo."),
+      }),
+    )
+    .max(20, "No máximo 20 medicamentos por receita."),
+  orientacoes: z.string().trim().max(2000),
+  salvarModelo: z.string().trim().max(60),
+});
+
+/** Emite a receita (não muda depois) e, se pedido, guarda como modelo. Devolve o endereço de impressão. */
+export async function emitirReceita(dados: z.input<typeof esquemaReceita>): Promise<RetornoUrl> {
+  const sessao = await sessaoProntuario();
+  if (!sessao) return { ok: false, erro: SEM_ACESSO };
+  const lido = esquemaReceita.safeParse(dados);
+  if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
+  const v = lido.data;
+  if (!v.itens.some((i) => i.medicamento)) return { ok: false, erro: "Inclua ao menos um medicamento." };
+  if (v.salvarModelo && v.salvarModelo.length < 2) return { ok: false, erro: "Dê um nome ao modelo." };
+  try {
+    const id = await comoUsuaria(sessao.usuarioId, async (db) => {
+      const { rows } = await db.query<{ id: string }>(
+        "select public.criar_receita($1, $2, $3, $4, $5::date, $6::jsonb, $7, $8::uuid, $9) as id",
+        [v.pessoaId, v.profissionalId, v.tipo, v.vias, v.data, JSON.stringify(v.itens), v.orientacoes || null,
+         v.atendimentoId || null, v.salvarModelo || null],
+      );
+      return rows[0].id;
+    });
+    revalidatePath(`/prontuario/${v.pessoaId}`);
+    return { ok: true, url: `/receita/${id}?imprimir=1` };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+export async function excluirModeloReceita(id: string): Promise<Retorno> {
+  const sessao = await sessaoProntuario();
+  if (!sessao) return { ok: false, erro: SEM_ACESSO };
+  if (!uuid.safeParse(id).success) return { ok: false, erro: "Modelo inválido." };
+  try {
+    await comoUsuaria(sessao.usuarioId, (db) => db.query("delete from public.receita_modelos where id = $1", [id]));
+    return { ok: true, mensagem: "Modelo excluído." };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}

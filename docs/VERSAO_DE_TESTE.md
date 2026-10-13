@@ -107,4 +107,4 @@ Siga [`docs/PUBLICACAO_OFICIAL.md`](PUBLICACAO_OFICIAL.md). A versão oficial us
 
 ### Atualizar a versão de teste já instalada
 
-Cole no SQL Editor do projeto de teste, na ordem, os arquivos `supabase/versao-teste/atualizar-*.sql` que ainda não aplicou. Os mais recentes, nesta ordem: `atualizar-seguranca-e-campanha-personalizada.sql` e `atualizar-campanhas-simples.sql`.
+Cole no SQL Editor do projeto de teste, na ordem, os arquivos `supabase/versao-teste/atualizar-*.sql` que ainda não aplicou. Os mais recentes, nesta ordem: `atualizar-seguranca-e-campanha-personalizada.sql`, `atualizar-campanhas-simples.sql` e `atualizar-receituario.sql`.

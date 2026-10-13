@@ -78,7 +78,8 @@ experimentar mudanças antes de elas chegarem à clínica.
 ## 4. Primeiro uso
 
 Em **Configurações**:
-- **Dentistas**: troque “Dentista responsável” pelos nomes reais (e as cores).
+- **Dentistas**: troque “Dentista responsável” pelos nomes reais, as cores, o **CRO** e a especialidade (saem na receita).
+- **Receituário**: endereço, telefone e cidade do consultório (cabeçalho e rodapé das receitas).
 - Confira as **regras de follow-up** e os limites de contatos por dia.
 
 Depois, cadastre os pacientes em **Contatos** (ou peça a importação de uma

@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, CalendarClock, ChevronRight, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarClock, ChevronRight, FileText, Printer, Repeat, UserRound } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -17,7 +17,9 @@ import {
   carregarPaciente,
   carregarPlano,
   carregarProximas,
+  carregarReceitas,
 } from "@/modules/prontuario/servidor";
+import { resumoReceita, TIPOS_RECEITA } from "@/modules/receitas/receitas";
 import { exigirSessao } from "@/modules/sessao/sessao";
 import { SemAcessoProntuario } from "../sem-acesso";
 
@@ -55,12 +57,13 @@ export default async function Prontuario({
     const financeiro = sessao.podeVerFinanceiro ? await carregarFinanceiro(db, pessoaId) : null;
     const catalogo = await carregarCatalogo(db, sessao.clinicaId);
     const pagamento = await carregarPagamentoPlano(db, pessoaId, sessao.podeVerFinanceiro);
+    const receitas = await carregarReceitas(db, pessoaId);
     // Odontograma: o da consulta escolhida (evolução) ou o da mais recente.
     const escolhida = consultas.find((c) => c.id === busca.consulta) ?? consultas[0];
     const odonto = escolhida
       ? (await db.query<{ odontograma: unknown }>("select odontograma from public.atendimentos where id = $1", [escolhida.id])).rows[0].odontograma
       : {};
-    return { paciente, hoje, consultas, plano, proximas, financeiro, catalogo, pagamento, escolhida, odonto: normalizarOdontograma(odonto) };
+    return { paciente, hoje, consultas, plano, proximas, financeiro, catalogo, pagamento, receitas, escolhida, odonto: normalizarOdontograma(odonto) };
   });
   if (!d) notFound();
 
@@ -104,6 +107,12 @@ export default async function Prontuario({
             className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte bg-superficie px-3.5 py-2 text-sm font-medium hover:border-dourado"
           >
             <UserRound className="size-4" /> Cadastro
+          </Link>
+          <Link
+            href={`/prontuario/${p.id}/receita/nova${ultima?.data === hoje ? `?consulta=${ultima.id}` : ""}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte bg-superficie px-3.5 py-2 text-sm font-medium hover:border-dourado"
+          >
+            <FileText className="size-4 text-dourado" /> Nova receita
           </Link>
           <BotaoNovaConsulta pessoaId={p.id} />
         </div>
@@ -256,6 +265,42 @@ export default async function Prontuario({
                   </li>
                 ))}
               </ol>
+            )}
+          </Bloco>
+
+          <Bloco
+            titulo="Receitas"
+            id="receitas"
+            acao={
+              <Link href={`/prontuario/${p.id}/receita/nova`} className="text-xs text-dourado-escuro underline">
+                Nova receita
+              </Link>
+            }
+          >
+            {d.receitas.length === 0 ? (
+              <p className="text-sm text-sutil">Nenhuma receita emitida.</p>
+            ) : (
+              <ul aria-label="Receitas emitidas" className="space-y-2">
+                {d.receitas.map((r) => (
+                  <li key={r.id} className="rounded-lg border border-borda px-3 py-2">
+                    <p className="text-sm font-medium">{resumoReceita(r.itens)}</p>
+                    <p className="text-xs text-sutil">
+                      {[br(r.data), r.profissional, r.tipo === "controle_especial" ? TIPOS_RECEITA.controle_especial : null,
+                        r.atendimento_numero ? `consulta ${String(r.atendimento_numero).padStart(2, "0")}` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                    <div className="mt-1.5 flex gap-3 text-xs">
+                      <Link href={`/receita/${r.id}`} className="inline-flex items-center gap-1 text-dourado-escuro hover:underline">
+                        <Printer className="size-3.5" /> Imprimir
+                      </Link>
+                      <Link href={`/prontuario/${p.id}/receita/nova?repetir=${r.id}`} className="inline-flex items-center gap-1 text-suave hover:underline">
+                        <Repeat className="size-3.5" /> Repetir
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </Bloco>
 

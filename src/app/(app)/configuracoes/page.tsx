@@ -15,6 +15,8 @@ import {
 } from "@/modules/regras/regras";
 import { carregarRegras } from "@/modules/regras/servidor";
 import { Dentistas, type Dentista } from "@/components/configuracoes/dentistas";
+import { DadosDoReceituario } from "@/components/configuracoes/receituario";
+import { carregarDadosReceituario } from "@/modules/prontuario/servidor";
 import { RecomecarVersaoTeste } from "@/components/versao-teste";
 import { ambienteTeste } from "@/modules/sessao/ambiente";
 import { exigirSessao, loginDeDesenvolvimento } from "@/modules/sessao/sessao";
@@ -24,16 +26,17 @@ export const metadata = { title: "Configurações · Instituto CG" };
 export default async function Configuracoes() {
   const sessao = await exigirSessao();
   const admin = sessao.papel === "admin";
-  const { regras, limites, dentistas } = await comoUsuaria(sessao.usuarioId, async (db) => {
+  const { regras, limites, dentistas, receituario } = await comoUsuaria(sessao.usuarioId, async (db) => {
     const r = await carregarRegras(db, sessao.clinicaId);
     const d = await db.query<Dentista>(
-      `select p.id, p.nome, p.cor, p.ativo,
+      `select p.id, p.nome, p.cor, p.ativo, p.cro, p.especialidade,
               (select count(*)::int from public.agendamentos a
                 where a.profissional_id = p.id and a.status in ('agendado', 'confirmado') and a.inicio >= now()) as consultas_futuras
          from public.profissionais p where p.clinica_id = $1 order by p.ativo desc, p.criado_em`,
       [sessao.clinicaId],
     );
-    return { ...r, dentistas: d.rows };
+    const receituario = await carregarDadosReceituario(db, sessao.clinicaId);
+    return { ...r, dentistas: d.rows, receituario };
   });
   const teste = await ambienteTeste();
   const porSituacao = new Map(regras.map((r) => [r.situacao, r]));
@@ -106,10 +109,23 @@ export default async function Configuracoes() {
         </h2>
         <p className="text-sm text-sutil">
           Quem atende na clínica. Cada dentista tem uma cor na agenda, e horários
-          só entram em conflito com a mesma dentista.
+          só entram em conflito com a mesma dentista. O CRO e a especialidade
+          saem na assinatura das receitas.
         </p>
         <div className="mt-4 rounded-xl border border-borda bg-superficie px-4 sm:px-5">
           <Dentistas dentistas={dentistas} podeEditar={admin} />
+        </div>
+      </section>
+
+      <section aria-labelledby="receituario" className="mt-10">
+        <h2 id="receituario" className="font-titulo text-2xl">
+          Receituário
+        </h2>
+        <p className="text-sm text-sutil">
+          Dados impressos no cabeçalho e no rodapé das receitas.
+        </p>
+        <div className="mt-4">
+          <DadosDoReceituario dados={receituario} podeEditar={admin} />
         </div>
       </section>
 

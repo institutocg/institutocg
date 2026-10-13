@@ -89,6 +89,8 @@ const esquemaDentista = z.object({
   nome: z.string().trim().min(3, "Informe o nome da dentista.").max(80),
   cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Cor inválida."),
   ativo: z.boolean(),
+  cro: z.string().trim().max(30, "CRO muito longo."),
+  especialidade: z.string().trim().max(80, "Especialidade muito longa."),
 });
 
 /** Inclui ou altera uma dentista da agenda (somente a administradora). */
@@ -101,7 +103,9 @@ export async function salvarDentista(dados: z.input<typeof esquemaDentista>): Pr
   try {
     await comoUsuaria(sessao.usuarioId, async (db) => {
       if (!v.id) {
-        await db.query("insert into public.profissionais (clinica_id, nome, cor) values ($1, $2, $3)", [sessao.clinicaId, v.nome, v.cor]);
+        await db.query("insert into public.profissionais (clinica_id, nome, cor, cro, especialidade) values ($1, $2, $3, $4, $5)", [
+          sessao.clinicaId, v.nome, v.cor, v.cro || null, v.especialidade || null,
+        ]);
         return;
       }
       if (!v.ativo) {
@@ -118,13 +122,39 @@ export async function salvarDentista(dados: z.input<typeof esquemaDentista>): Pr
           );
         }
       }
-      const r = await db.query("update public.profissionais set nome = $2, cor = $3, ativo = $4 where id = $1 and clinica_id = $5", [
-        v.id, v.nome, v.cor, v.ativo, sessao.clinicaId,
-      ]);
+      const r = await db.query(
+        `update public.profissionais set nome = $2, cor = $3, ativo = $4, cro = $6, especialidade = $7
+          where id = $1 and clinica_id = $5`,
+        [v.id, v.nome, v.cor, v.ativo, sessao.clinicaId, v.cro || null, v.especialidade || null],
+      );
       if (!r.rowCount) throw Object.assign(new Error("Dentista não encontrada ou sem permissão."), { code: "P0002" });
     });
     revalidatePath("/", "layout");
     return { ok: true, mensagem: v.id ? "Dentista atualizada." : "Dentista incluída. Ela já aparece na agenda." };
+  } catch (erro) {
+    return { ok: false, erro: mensagemDeErro(erro) };
+  }
+}
+
+const esquemaReceituario = z.object({
+  endereco: z.string().trim().max(200, "Endereço muito longo."),
+  telefone: z.string().trim().max(60, "Telefone muito longo."),
+  cidade: z.string().trim().max(80, "Cidade muito longa."),
+  rodape: z.string().trim().max(200, "Rodapé muito longo."),
+});
+
+/** Cabeçalho e rodapé das receitas impressas. */
+export async function salvarDadosReceituario(dados: z.input<typeof esquemaReceituario>): Promise<Retorno> {
+  const sessao = await exigirSessao();
+  if (sessao.papel !== "admin") return { ok: false, erro: "Somente a administradora altera os dados do receituário." };
+  const lido = esquemaReceituario.safeParse(dados);
+  if (!lido.success) return { ok: false, erro: lido.error.issues[0].message };
+  try {
+    await comoUsuaria(sessao.usuarioId, (db) =>
+      db.query("select public.salvar_dados_receituario($1, $2::jsonb)", [sessao.clinicaId, JSON.stringify(lido.data)]),
+    );
+    revalidatePath("/configuracoes");
+    return { ok: true, mensagem: "Dados do receituário salvos." };
   } catch (erro) {
     return { ok: false, erro: mensagemDeErro(erro) };
   }

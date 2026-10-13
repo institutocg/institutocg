@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarClock } from "lucide-react";
+import { ArrowLeft, CalendarClock, FileText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -100,11 +100,19 @@ export default async function Consulta({ params }: { params: Promise<{ pessoaId:
               .join(" · ")}
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/prontuario/${p.id}/receita/nova?consulta=${a.id}`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3 py-1.5 text-sm hover:border-dourado"
+        >
+          <FileText className="size-4 text-dourado" /> Receita
+        </Link>
         {!finalizada && (
           <Link href={`/agenda?novo=${p.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-borda-forte px-3 py-1.5 text-sm hover:border-dourado">
             <CalendarClock className="size-4 text-dourado" /> Agendar retorno
           </Link>
         )}
+        </div>
       </header>
 
       <div className="mt-6">

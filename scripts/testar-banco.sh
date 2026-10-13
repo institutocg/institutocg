@@ -97,16 +97,20 @@ echo "→ Atualizações da versão de teste (sobre a versão anterior)"
 ATU=(psql -h "$DADOS" -p "$PORTA" -U postgres -d atualizacao -v ON_ERROR_STOP=1 -q -X)
 "${ATU[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase_real.sql"
 for arquivo in "$RAIZ"/supabase/migrations/*.sql; do
-  case "$(basename "$arquivo")" in 20261009120000_*|20261010120000_*|20261012120000_*) continue ;; esac
+  case "$(basename "$arquivo")" in 20261009120000_*|20261010120000_*|20261012120000_*|20261013120000_*) continue ;; esac
   "${ATU[@]}" -f "$arquivo" >/dev/null
 done
-"${ATU[@]}" -f "$RAIZ/supabase/seed.sql" >/dev/null
+# Dados de exemplo como estavam na versão de teste anterior (antes do receituário).
+git -C "$RAIZ" show c95057f:supabase/seed.sql | "${ATU[@]}" >/dev/null
 "${ATU[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-seguranca-e-campanha-personalizada.sql" >/dev/null
 "${ATU[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-campanhas-simples.sql" >/dev/null
+"${ATU[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-receituario.sql" >/dev/null
 [ "$("${ATU[@]}" -At -c "select public.ambiente_teste() and (select count(*) from public.pessoas) > 10
     and not has_function_privilege('anon', 'public.prever_campanha(uuid, text, int, uuid, boolean, jsonb)', 'execute')
     and has_function_privilege('authenticated', 'public.prever_campanha(uuid, text, int, uuid, boolean, jsonb)', 'execute')
-    and has_function_privilege('authenticated', 'public.vindas(uuid)', 'execute')")" = "t" ] \
+    and has_function_privilege('authenticated', 'public.vindas(uuid)', 'execute')
+    and has_function_privilege('authenticated', 'public.criar_receita(uuid, uuid, text, int, date, jsonb, text, uuid, text)', 'execute')
+    and not has_function_privilege('anon', 'public.criar_receita(uuid, uuid, text, int, date, jsonb, text, uuid, text)', 'execute')")" = "t" ] \
   || { echo "FALHOU: atualização da versão de teste" >&2; exit 1; }
 echo "  ok - aplica sobre a versão de teste anterior sem perder os dados"
 

@@ -1114,6 +1114,10 @@ A tela de nova campanha mostra só: *Demonstrou interesse e não fez* (procedime
 - Cabeçalhos de segurança e `noindex` (`next.config.ts`, `robots.ts`).
 - Instalação: `supabase/producao/instalar.sql` + `equipe.sql`; guia em `docs/PUBLICACAO_OFICIAL.md`.
 
+## 14.15 Receituário (implementado)
+
+No prontuário: **Nova receita** (também dentro da consulta). A dentista que assina (nome, especialidade e CRO de Configurações → Dentistas), data, tipo (*simples*, com opção de 2 vias, ou *controle especial*, sempre em 2 vias com identificação do emitente, comprador e fornecedor), medicamentos (dose, quantidade, via, como usar; agrupados por via na impressão) e orientações. Pode começar de um **modelo** e guardar como modelo. Emitida, a receita não muda nem é apagada (trigger + RLS; auditoria); pode ser reimpressa ou **repetida**. A impressão (`/receita/[id]`) é uma página A4 fora do menu, com cabeçalho e rodapé de Configurações → Receituário. Quando chegar o modelo da clínica, só o visual de `src/app/(impressao)/receita` muda.
+
 ## 15. Decisões pendentes
 
 **Decidido:**

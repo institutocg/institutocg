@@ -10,6 +10,8 @@ export interface Dentista {
   nome: string;
   cor: string;
   ativo: boolean;
+  cro: string | null;
+  especialidade: string | null;
   consultas_futuras: number;
 }
 
@@ -23,14 +25,32 @@ function Linha({ d, podeEditar, novo, aoConcluir }: { d: Dentista; podeEditar: b
   const [nome, setNome] = useState(d.nome);
   const [cor, setCor] = useState(d.cor);
   const [ativo, setAtivo] = useState(d.ativo);
+  const [cro, setCro] = useState(d.cro ?? "");
+  const [especialidade, setEspecialidade] = useState(d.especialidade ?? "");
   const [pendente, iniciar] = useTransition();
-  const mudou = novo || nome !== d.nome || cor !== d.cor || ativo !== d.ativo;
+  const mudou =
+    novo || nome !== d.nome || cor !== d.cor || ativo !== d.ativo || cro !== (d.cro ?? "") || especialidade !== (d.especialidade ?? "");
   return (
     <li aria-label={novo ? "Nova dentista" : d.nome} className="flex flex-wrap items-center gap-3 border-b border-borda py-3 last:border-0">
       <span className="size-4 shrink-0 rounded-full" style={{ backgroundColor: cor }} aria-hidden />
       <label className="min-w-48 flex-1">
         <span className="sr-only">Nome</span>
         <input value={nome} disabled={!podeEditar} onChange={(e) => setNome(e.target.value)} placeholder="Nome da dentista" className={CAMPO} />
+      </label>
+      <label className="w-36">
+        <span className="sr-only">CRO</span>
+        <input value={cro} disabled={!podeEditar} onChange={(e) => setCro(e.target.value)} placeholder="CRO-SP 00000" maxLength={30} className={CAMPO} />
+      </label>
+      <label className="w-44">
+        <span className="sr-only">Especialidade</span>
+        <input
+          value={especialidade}
+          disabled={!podeEditar}
+          onChange={(e) => setEspecialidade(e.target.value)}
+          placeholder="Ex.: Cirurgiã-dentista"
+          maxLength={80}
+          className={CAMPO}
+        />
       </label>
       {podeEditar && (
         <div role="radiogroup" aria-label="Cor na agenda" className="flex gap-1.5">
@@ -61,7 +81,7 @@ function Linha({ d, podeEditar, novo, aoConcluir }: { d: Dentista; podeEditar: b
           disabled={pendente}
           onClick={() =>
             iniciar(async () => {
-              const r = await salvarDentista({ id: novo ? "" : d.id, nome, cor, ativo });
+              const r = await salvarDentista({ id: novo ? "" : d.id, nome, cor, ativo, cro, especialidade });
               if (r.ok) {
                 avisar(r.mensagem);
                 aoConcluir?.();
@@ -84,11 +104,11 @@ export function Dentistas({ dentistas, podeEditar }: { dentistas: Dentista[]; po
     <div>
       <ul aria-label="Dentistas">
         {dentistas.map((d) => (
-          <Linha key={`${d.id}-${d.nome}-${d.cor}-${d.ativo}`} d={d} podeEditar={podeEditar} />
+          <Linha key={`${d.id}-${d.nome}-${d.cor}-${d.ativo}-${d.cro}-${d.especialidade}`} d={d} podeEditar={podeEditar} />
         ))}
         {incluindo && (
           <Linha
-            d={{ id: "", nome: "", cor: livre, ativo: true, consultas_futuras: 0 }}
+            d={{ id: "", nome: "", cor: livre, ativo: true, cro: null, especialidade: null, consultas_futuras: 0 }}
             podeEditar
             novo
             aoConcluir={() => setIncluindo(false)}

@@ -25,6 +25,7 @@ PostgreSQL (Supabase). Somente dados **comerciais e administrativos**: não há 
 | `20261009120000_seguranca_producao.sql` | **Endurecimento**: `anon` (quem não fez login) não executa nenhuma função nem lê nenhuma tabela |
 | `20261010120000_campanha_personalizada.sql` | **Campanha personalizada**: segmento `personalizada` com filtros (`campanhas.filtros` jsonb: público, procedimento fez/interesse, sem vir há X meses, idade, bairro/cidade, origem, abrir negociação) |
 | `20261012120000_campanhas_enxutas.sql` | **Campanhas enxutas**: `interesse` com procedimento opcional (inclui quem negociou e não fechou; cada pessoa vem com o procedimento dela); `vindas(pessoa)` = dias com consulta (agenda “compareceu” ou prontuário) |
+| `20261013120000_receituario.sql` | **Receituário**: `receitas` (imutável, auditada; simples ou controle especial; 1 ou 2 vias), `receita_modelos`, `criar_receita()`, `v_receitas`, `profissionais.cro`/`especialidade`, `salvar_dados_receituario()` (`clinicas.configuracoes->'receituario'`) |
 
 ## Motor de ações — regras de follow-up configuráveis
 
