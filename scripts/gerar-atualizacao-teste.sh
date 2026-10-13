@@ -7,14 +7,22 @@
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-DIR="$RAIZ/supabase/versao-teste"
-DESTINO="$DIR/atualizar-tudo.sql"
+DESTINO="$RAIZ/supabase/versao-teste/atualizar-tudo.sql"
 
-# arquivo | condição que indica que ainda NÃO foi aplicado
+# arquivo (relativo a supabase/) | condição para rodar ("sempre" = é seguro repetir).
+# Inclui tudo desde a primeira versão de teste (indicadores): quem pulou alguma
+# atualização antiga também fica em dia. As partes "sempre" refazem as funções de
+# campanha na versão atual (uma parte antiga reaplicada não deixa versão velha).
 PARTES=(
-  "atualizar-seguranca-e-campanha-personalizada.sql|not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'campanhas' and column_name = 'filtros')"
-  "atualizar-campanhas-simples.sql|to_regprocedure('public.vindas(uuid)') is null"
-  "atualizar-receituario.sql|to_regclass('public.receitas') is null"
+  "migrations/20261005120000_agenda_financeiro.sql|not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'vendas' and column_name = 'agendamento_id')"
+  "migrations/20261006120000_prontuario.sql|to_regclass('public.prontuarios') is null"
+  "migrations/20261007120000_prontuario_simples.sql|to_regprocedure('public.procedimento_por_nome(uuid,text)') is null"
+  "migrations/20261008120000_mais_campanhas.sql|to_regprocedure('public.campanha_de_relacionamento(text)') is null"
+  "migrations/20261009120000_seguranca_producao.sql|sempre"
+  "migrations/20261010120000_campanha_personalizada.sql|sempre"
+  "migrations/20261012120000_campanhas_enxutas.sql|sempre"
+  "migrations/20261013120000_receituario.sql|to_regclass('public.receitas') is null"
+  "seed.sql|sempre"
 )
 
 gerar() {
@@ -27,8 +35,8 @@ gerar() {
 -- Cole no SQL Editor do projeto de TESTE e clique em "Run".
 -- Pode colar mesmo que já tenha aplicado alguma atualização antes: o que já
 -- existe é pulado. Os dados que você colocou continuam lá.
--- Inclui: segurança reforçada, campanhas novas ("Criar a minha campanha") e
--- receituário.
+-- Inclui tudo desde a primeira versão de teste: agenda, prontuário, campanhas,
+-- segurança reforçada, "Criar a minha campanha" e receituário.
 -- =============================================================================
 
 CAB
@@ -36,15 +44,21 @@ CAB
   for parte in "${PARTES[@]}"; do
     n=$((n + 1))
     local arquivo="${parte%%|*}" condicao="${parte#*|}"
+    [ "$condicao" = "sempre" ] && condicao="true"
     printf -- '-- ---------------------------------------------------------------------------\n'
     printf -- '-- Parte %d: %s\n' "$n" "$arquivo"
     printf -- '-- ---------------------------------------------------------------------------\n'
     printf 'do $parte%d$\nbegin\n  if %s then\n    execute $atualizacao%d$\n' "$n" "$condicao" "$n"
-    # Sem o begin/commit do arquivo (aqui tudo roda junto).
-    sed -e '/^begin;$/d' -e '/^commit;$/d' "$DIR/$arquivo"
+    # seed.sql: só as funções da versão de teste (sem recarregar os dados).
+    grep -v '^select teste.carregar_dados_ficticios();$' "$RAIZ/supabase/$arquivo"
     printf '$atualizacao%d$;\n    raise notice %s;\n  else\n    raise notice %s;\n  end if;\nend $parte%d$;\n\n' \
       "$n" "'Parte $n aplicada.'" "'Parte $n já estava aplicada — pulada.'" "$n"
   done
+  cat <<'SEG'
+-- Ninguém sem login chama funções (vale também para o que foi criado acima).
+revoke execute on all functions in schema public from public, anon;
+
+SEG
   cat <<'FIM'
 select 'Versão de teste atualizada. No site: Configurações → Versão de teste → "Recomeçar com dados de exemplo" para ver os exemplos novos.' as resultado;
 FIM

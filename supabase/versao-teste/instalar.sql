@@ -7253,6 +7253,7 @@ alter table public.campanhas add constraint campanhas_segmento_check check (segm
   'inativos', 'procedimento', 'nao_fecharam',
   'tratamento_pendente', 'avaliacao_nao_agendada', 'aniversario', 'pos_tratamento', 'interesse', 'desmarcou', 'especiais'));
 alter table public.campanhas drop constraint if exists campanhas_check;
+alter table public.campanhas drop constraint if exists campanhas_procedimento_check;
 alter table public.campanhas add constraint campanhas_procedimento_check
   check (segmento not in ('procedimento', 'interesse') or procedimento_id is not null);
 

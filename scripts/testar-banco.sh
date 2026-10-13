@@ -116,22 +116,61 @@ echo "  ok - aplica sobre a versão de teste anterior sem perder os dados"
 
 echo "→ Atualização da versão de teste num arquivo só (atualizar-tudo.sql)"
 "$RAIZ/scripts/gerar-atualizacao-teste.sh" --conferir
-"${PSQL[@]}" -c "create database tudo" >/dev/null
+# Cria um banco "versão de teste antiga": migrações até $2 (exclusive), sem as posteriores.
+banco_antigo() {
+  local nome="$1" corte="$2"
+  "${PSQL[@]}" -c "create database $nome" >/dev/null
+  local B=(psql -h "$DADOS" -p "$PORTA" -U postgres -d "$nome" -v ON_ERROR_STOP=1 -q -X)
+  "${B[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase_real.sql"
+  for arquivo in "$RAIZ"/supabase/migrations/*.sql; do
+    if [[ "$(basename "$arquivo")" < "$corte" ]]; then "${B[@]}" -f "$arquivo" >/dev/null; fi
+  done
+  return 0
+}
+# Confere o banco atualizado: tudo existe e a administradora cria campanhas e receitas.
+conferir_atualizado() {
+  local B=(psql -h "$DADOS" -p "$PORTA" -U postgres -d "$1" -v ON_ERROR_STOP=1 -q -X)
+  [ "$("${B[@]}" -At -c "select to_regclass('public.receitas') is not null and to_regprocedure('public.vindas(uuid)') is not null
+      and to_regprocedure('public.campanha_de_relacionamento(text)') is not null
+      and to_regprocedure('public.prever_campanha(uuid,text,int,uuid,boolean)') is null
+      and not has_function_privilege('anon', 'public.criar_receita(uuid, uuid, text, int, date, jsonb, text, uuid, text)', 'execute')")" = "t" ] \
+    || { echo "FALHOU: $1 — estrutura incompleta depois de atualizar-tudo.sql" >&2; exit 1; }
+  "${B[@]}" -At >/dev/null <<'SQL' || { echo "FALHOU: $1 — criar campanha depois de atualizar-tudo.sql" >&2; exit 1; }
+select set_config('request.jwt.claims', json_build_object('sub', u.id, 'role', 'authenticated')::text, false),
+       set_config('request.jwt.claim.sub', u.id::text, false)
+  from auth.users u where email = 'dona@teste.institutocg.com.br';
+set role authenticated;
+select public.criar_campanha(c.id, 'Minha', 'personalizada', 1, null, false, 'Olá, {{nome}}!', 10, public.hoje_clinica(c.id),
+         (select array_agg(pessoa_id) from (select pessoa_id from public.prever_campanha(c.id, 'personalizada', 1, null, false, null) limit 2) x),
+         '{"publico_alvo": "x", "oferta": "y"}'),
+       (select count(*) from public.prever_campanha(c.id, 'inativos', 6)),
+       (select count(*) from public.prever_campanha(c.id, 'interesse', 12)),
+       (select count(*) from public.prever_campanha(c.id, 'aniversario', 1))
+  from public.clinicas c;
+SQL
+}
+
+# Caso real: versão de teste sem a atualização de campanhas (20261008) que já tinha
+# colado a primeira versão do atualizar-tudo.sql.
+banco_antigo tudo 20261008
 TUD=(psql -h "$DADOS" -p "$PORTA" -U postgres -d tudo -v ON_ERROR_STOP=1 -q -X)
-"${TUD[@]}" -f "$RAIZ/supabase/tests/00_simulacao_supabase_real.sql"
-for arquivo in "$RAIZ"/supabase/migrations/*.sql; do
-  case "$(basename "$arquivo")" in 20261009120000_*|20261010120000_*|20261012120000_*|20261013120000_*) continue ;; esac
-  "${TUD[@]}" -f "$arquivo" >/dev/null
-done
 git -C "$RAIZ" show c95057f:supabase/seed.sql | "${TUD[@]}" >/dev/null
+"${TUD[@]}" -At -c "select * from teste.criar_logins_de_teste()" >/dev/null
+git -C "$RAIZ" show 17243d5:supabase/versao-teste/atualizar-tudo.sql | "${TUD[@]}" >/dev/null 2>&1
 ANTES="$("${TUD[@]}" -At -c "select count(*) from public.pessoas")"
 for _ in 1 2; do "${TUD[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-tudo.sql" >/dev/null 2>&1 \
   || { echo "FALHOU: atualizar-tudo.sql" >&2; "${TUD[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-tudo.sql" >&2; exit 1; }; done
-[ "$("${TUD[@]}" -At -c "select (select count(*) from public.pessoas) = $ANTES and public.ambiente_teste()
-    and to_regclass('public.receitas') is not null and to_regprocedure('public.vindas(uuid)') is not null
-    and exists (select 1 from information_schema.columns where table_name = 'campanhas' and column_name = 'filtros')
-    and not has_function_privilege('anon', 'public.criar_receita(uuid, uuid, text, int, date, jsonb, text, uuid, text)', 'execute')")" = "t" ] \
-  || { echo "FALHOU: atualizar-tudo.sql não deixou o banco atualizado" >&2; exit 1; }
-echo "  ok - um arquivo só: aplica sobre a versão anterior, colar de novo não dá erro, nenhum dado perdido"
+[ "$("${TUD[@]}" -At -c "select count(*) from public.pessoas")" = "$ANTES" ] || { echo "FALHOU: atualizar-tudo.sql perdeu dados" >&2; exit 1; }
+conferir_atualizado tudo
+echo "  ok - versão de teste sem a atualização de campanhas: completa, colar de novo não dá erro, nenhum dado perdido"
+
+# Versão de teste da primeira instalação (até os indicadores), sem nenhuma atualização.
+banco_antigo tudo_antigo 20261005
+TUA=(psql -h "$DADOS" -p "$PORTA" -U postgres -d tudo_antigo -v ON_ERROR_STOP=1 -q -X)
+"${TUA[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-tudo.sql" >/dev/null 2>&1 \
+  || { echo "FALHOU: atualizar-tudo.sql na versão mais antiga" >&2; "${TUA[@]}" -f "$RAIZ/supabase/versao-teste/atualizar-tudo.sql" >&2; exit 1; }
+"${TUA[@]}" -At -c "select teste.carregar_dados_ficticios()" -c "select * from teste.criar_logins_de_teste()" >/dev/null
+conferir_atualizado tudo_antigo
+echo "  ok - versão de teste da primeira instalação: um arquivo só deixa tudo em dia"
 
 echo "✓ Banco de dados verificado."
