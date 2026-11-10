@@ -19,8 +19,8 @@ Construir em FASES: começar pela Fase 1 e só avançar para a próxima após ap
 - Login com e-mail e senha. ~~Autenticação em dois fatores~~ (removida em 10/11/2026 — ver histórico).
 - Dados de saúde são dados sensíveis: row-level security em TODAS as tabelas, banco hospedado no Brasil, criptografia em trânsito e em repouso. Backups: na fase de teste (plano gratuito), exportação manual de cópia de segurança.
 - Registro de log de acesso e de alterações (quem viu e quem editou o quê, e quando).
-- Ao enviar dados para a IA gerar materiais, NÃO enviar nome, CPF, endereço, contato nem dados financeiros. Enviar apenas dados pseudonimizados (iniciais, idade, sexo, problemas, exames, texto clínico). O nome só é inserido no documento final, dentro do sistema.
-- Todo conteúdo gerado por IA nasce como RASCUNHO e só pode ser exportado ou enviado depois que a médica marcar "Revisado e aprovado".
+- **Sem IA no sistema** (decisão de 10/11/2026): nenhum dado sai do sistema para serviços de inteligência artificial. Os textos-base são escritos durante a construção e aprovados pela médica; os materiais são montados por modelos fixos.
+- Todo texto-base nasce como RASCUNHO e só pode ser usado em materiais de pacientes depois que a médica marcar "Revisado e aprovado".
 
 ## 3. Cadastro do paciente
 
@@ -181,9 +181,10 @@ Sugerir outros indicadores que façam sentido para o consultório.
 
 - Uma ficha por doença (diabetes tipo 2, obesidade, hipertensão, dislipidemia, esteatose hepática, hipotireoidismo, menopausa, osteoporose, pré-diabetes; lista editável).
 - Cada ficha tem um TEXTO-BASE em linguagem leiga, dividido nas seções dos slides (seção 8), além de: metas padrão dos exames por perfil de paciente, fonte (diretriz e ano) e data da última revisão.
-- A IA pode redigir uma primeira versão do texto-base a partir das diretrizes brasileiras mais recentes (SBD, ABESO, SBC, SBEM e outras pertinentes), citando a diretriz e o ano. Essa versão fica como rascunho até ser aprovada.
+- A primeira versão do texto-base é redigida durante a construção do sistema (sem IA dentro do sistema) a partir das diretrizes brasileiras mais recentes (SBD, ABESO, SBC, SBEM e outras pertinentes), citando a diretriz e o ano. Essa versão fica como rascunho até ser aprovada.
+- **Mapa de conexões entre doenças:** tabela editável de ligações (ex.: obesidade → resistência à insulina, "aumenta"), também com status rascunho/aprovado. É usada no slide de conexão.
 - Status: rascunho, aprovado, revisar (alertar quando a ficha tiver mais de 12 meses sem revisão).
-- REGRA: os materiais dos pacientes só podem usar fichas APROVADAS. A IA não cria conteúdo médico novo a cada paciente; ela parte do texto-base aprovado e só adapta ao caso (idade, comorbidades, nível de linguagem).
+- REGRA: os materiais dos pacientes só podem usar fichas APROVADAS. O sistema não cria conteúdo médico novo a cada paciente: usa o texto-base aprovado, com nome e idade preenchidos, e a médica pode editar o texto à mão antes de apresentar ou exportar.
 
 ## 8. Slides pré-consulta
 
@@ -194,14 +195,14 @@ Sugerir outros indicadores que façam sentido para o consultório.
   3. O que pode causar se não tratar: as complicações, em tom honesto mas sem assustar
   4. Tem tratamento: os pilares (estilo de vida, medicação, acompanhamento)
   5. O que depende de você: 2 ou 3 ações concretas
-  6. Slide de conexão: um mapa visual de como os problemas do paciente se relacionam entre si (por exemplo, obesidade → resistência à insulina → diabetes → risco cardiovascular)
+  6. Slide de conexão: um mapa visual de como os problemas do paciente se relacionam entre si (por exemplo, obesidade → resistência à insulina → diabetes → risco cardiovascular). Montado automaticamente a partir do mapa de conexões aprovado da biblioteca, usando só as ligações entre os problemas do paciente (mais os passos intermediários); editável antes de apresentar.
 - Estilo: pouco texto, fonte grande, ícones e ilustrações simples (sem fotos), visual limpo.
 - Os slides são para a médica mostrar durante a consulta: modo de apresentação em tela cheia, exportação em PDF e possibilidade de editar o texto antes de apresentar.
 
 ## 9. Consultas
 
-- Na ficha do paciente, uma linha do tempo de consultas. Em cada consulta: tipo (primeira consulta, segunda consulta, terceira...), data, "Retornar em: X meses" (obrigatório; ver seção 4) e um campo de texto onde é colado o que foi escrito no prontuário do Afya Clinic.
-- Ao salvar, a IA extrai e propõe: problemas de saúde (novos ou já existentes), exames com valores e datas, condutas combinadas e próximos passos. A médica revisa e confirma antes de qualquer dado ser gravado.
+- Na ficha do paciente, uma linha do tempo de consultas. Em cada consulta: tipo (primeira consulta, segunda consulta, terceira...), data, "Retornar em: X meses" (obrigatório; ver seção 4) e um campo de texto opcional onde pode ser colado o que foi escrito no prontuário do Afya Clinic.
+- Formulário rápido da consulta (sem IA): problemas de saúde (vindos do cadastro, marcar/acrescentar), exames com valores e datas, condutas combinadas e próximos passos.
 - Registrar uma consulta atualiza automaticamente a etapa do paciente e a data prevista de retorno, e conclui as tarefas de retorno atrasado e de reativação dele.
 
 ## 10. Exames e metas
@@ -234,13 +235,13 @@ Exportação em PDF, com uma opção para copiar o link ou enviar por WhatsApp.
 ## 12. Check-in semanal (pacientes em plano de acompanhamento)
 
 - A médica envia um formulário semanal ao paciente (inicialmente pelo Google Forms) e depois anexa ou cola as respostas no sistema (PDF, imagem, texto ou exportação do formulário).
-- A IA gera o "Resumo do check-in da semana" com três blocos: Como você está nesta semana, O que vamos manter e O que vamos mudar (se houver).
-- Se aparecer uma queixa nova, um efeito colateral importante ou baixa adesão, o sistema alerta e sugere criar uma tarefa de agendamento de consulta no CRM.
+- A médica preenche o "Resumo do check-in da semana" com três blocos: Como você está nesta semana, O que vamos manter e O que vamos mudar (se houver).
+- Se respostas-chave indicarem queixa nova, efeito colateral importante ou baixa adesão (ou a médica marcar), o sistema alerta e sugere criar uma tarefa de agendamento de consulta no CRM.
 - Histórico de check-ins na ficha do paciente, com um gráfico simples de adesão ao longo das semanas.
 
 ## 13. Relatório de obesidade (pacientes em tratamento de obesidade)
 
-- Anexar o laudo da bioimpedância (PDF ou foto) a cada consulta. A IA extrai: data, peso, IMC, % de gordura, massa gorda, massa magra/muscular e gordura visceral. A médica confere antes de salvar.
+- Anexar o laudo da bioimpedância (PDF ou foto) a cada consulta. A médica digita: data, peso, IMC, % de gordura, massa gorda, massa magra/muscular e gordura visceral (o laudo fica anexado).
 - Registro também da medicação e da dose em cada data.
 - Relatório visual que se atualiza a cada consulta:
   - Tabela de evolução (data, peso, total perdido em kg e %, % de gordura, massa muscular, gordura visceral, medicação e dose)
@@ -261,7 +262,7 @@ Exportação em PDF, com uma opção para copiar o link ou enviar por WhatsApp.
 - Supabase (plano Free na fase de teste): banco Postgres, autenticação por e-mail e senha, Storage para os laudos e documentos (buckets PRIVADOS, acesso só por URL assinada e temporária) e row-level security em TODAS as tabelas
 - Projeto do Supabase na região South America (São Paulo)
 - Deploy na Vercel (plano Hobby na fase de teste), com as funções na região de São Paulo (gru1)
-- IA: API da Anthropic (Claude), chamada SOMENTE pelo servidor (rotas de API/server actions). A chave nunca vai para o navegador.
+- ~~IA: API da Anthropic~~ — removida do escopo em 10/11/2026. O código fica organizado para permitir acrescentar IA no futuro, se desejado.
 - Gráficos: Recharts
 - PDFs: gerados a partir de páginas HTML no formato A4, com uma solução que funcione bem na Vercel
 - Rotinas automáticas diárias (mudanças automáticas de etapa, retornos atrasados, reativações de 6 e 12 meses, pagamentos atrasados e criação das tarefas do dia): Vercel Cron ou pg_cron do Supabase, rodando de madrugada no horário de Brasília
@@ -279,7 +280,7 @@ Fases:
 Forma de trabalho:
 - Escopo salvo em `docs/escopo.md` e regras principais em `CLAUDE.md`.
 - Git com commits pequenos e mensagens claras ao final de cada etapa.
-- Antes de escrever código, apresentar: (1) o modelo de dados (tabelas, relações e políticas de RLS), (2) as telas da Fase 1 e (3) um passo a passo do que a médica precisa fazer fora do código (contas, projetos e chaves no GitHub, Supabase, Vercel e Anthropic).
+- Antes de escrever código, apresentar: (1) o modelo de dados (tabelas, relações e políticas de RLS), (2) as telas da Fase 1 e (3) um passo a passo do que a médica precisa fazer fora do código (contas, projetos e chaves no GitHub, Supabase e Vercel).
 - Fazer perguntas se algo estiver ambíguo.
 - Criar dados fictícios de teste (seed) cobrindo todas as etapas do funil, e nunca usar dados reais de pacientes.
 - Ao final de cada fase, entregar um roteiro de teste simples ("entre em tal tela, clique em tal botão, o esperado é...") para validação antes de seguir.
@@ -292,3 +293,5 @@ Forma de trabalho:
 |---|---|---|
 | 10/11/2026 | Versão inicial | Escopo enviado pela médica |
 | 10/11/2026 | Removida a autenticação em dois fatores (login só com e-mail e senha); uso pessoal, não comercial; planos gratuitos (Supabase Free, Vercel Hobby) na fase de teste; sem documentos de LGPD para pacientes | Simplificação pedida pela médica |
+| 10/11/2026 | Removida a IA do sistema; textos-base e mapa de conexões escritos na construção e aprovados pela médica; dados clínicos e bioimpedância digitados em formulários; check-in resumido pela médica | Custo zero e nenhum dado saindo do sistema |
+| 10/11/2026 | CPF e data de nascimento obrigatórios a partir do agendamento da consulta (não no novo contato); plano pago à vista ou parcelado no cartão; retornos marcados podem ser registrados como agendamento sem mudar a etapa; tarefa semanal de check-in já na Fase 1; sexo: feminino ou masculino; sem importação de planilha | Respostas da médica às perguntas da Fase 1 |

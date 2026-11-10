@@ -1,7 +1,7 @@
 # NG Clinic — Planejamento da Fase 1
 
 > Documento para revisão e aprovação. **Nenhum código, banco ou serviço foi criado ainda.**
-> Data: 10/11/2026 · **Revisão 2 (10/11/2026):** login só com e-mail e senha (sem 2FA), uso pessoal, planos gratuitos na fase de teste, sem documentos de LGPD para pacientes.
+> Data: 10/11/2026 · **Revisão 3:** sem IA; respostas às perguntas incorporadas. · **Revisão 2 (10/11/2026):** login só com e-mail e senha (sem 2FA), uso pessoal, planos gratuitos na fase de teste, sem documentos de LGPD para pacientes.
 
 Este documento tem quatro partes:
 
@@ -32,7 +32,6 @@ Este documento tem quatro partes:
  │                               │  • Rotina automática toda madrugada (03:00)
  │                               │  • Cópia de segurança: exportação manual (plano gratuito)
  └───────────────────────────────┘
-        (Fase 2 em diante)  ──►  Anthropic (IA) — só recebe dados sem nome/CPF/contato
 ```
 
 **Como o sistema "lembra" das coisas — dois mecanismos:**
@@ -125,12 +124,14 @@ Convenções: toda tabela tem `id uuid`, `criado_em`, `atualizado_em`, `criado_p
 #### Pacientes
 
 **`pacientes`**
-- Identificação: `nome`, `data_nascimento`, `sexo` (`feminino` | `masculino` | `outro`), `cpf` (só dígitos, **único** quando preenchido), `telefone`, `email`
+- Identificação: `nome`, `data_nascimento`, `sexo` (`feminino` | `masculino`), `cpf` (só dígitos, **único** quando preenchido), `telefone`, `email`
 - Endereço: `cep`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`
 - Origem: `origem_id`, `indicado_por_paciente_id`, `indicado_por_nome` (médico), `canal_primeiro_contato` (`whatsapp` | `instagram`), `primeiro_contato_em`
 - `motivo_consulta`, `modalidade` (`avulsa` | `plano`), `observacoes`
 - Situação no CRM (mantida automaticamente): `etapa`, `etapa_desde`, `data_ultima_consulta`, `data_prevista_retorno`, `retorno_atrasado` (marcação para quem está em plano), `nao_contatar` ("Não quero ser contatado")
 - `arquivado_em` (em vez de apagar; exclusão definitiva só quando você pedir)
+
+No **Novo contato** são obrigatórios só nome, telefone, origem e canal. **CPF, data de nascimento e sexo** passam a ser obrigatórios quando a primeira consulta é **agendada** (o formulário da etapa pede o que faltar).
 
 A idade **não é guardada**: é calculada na hora a partir da data de nascimento.
 
@@ -147,7 +148,7 @@ A idade **não é guardada**: é calculada na hora a partir da data de nasciment
 
 #### Atendimento
 
-**`agendamentos`** — `paciente_id`, `inicio` (data e hora), `formato` (`presencial` | `teleconsulta`), `confirmacao` (`pendente` | `confirmada` | `nao_confirmada`), `situacao` (`agendada` | `compareceu` | `faltou` | `desmarcou`), `motivo_id` (se desmarcou), `consulta_id` (preenchido quando a consulta é registrada).
+**`agendamentos`** — usado para a primeira consulta **e também para retornos marcados** (`tipo`: `primeira` | `retorno`). Agendar um retorno **não muda a etapa** do paciente; só cria a tarefa de confirmação na véspera e, se nada for registrado, a de comparecimento. Campos: `paciente_id`, `inicio` (data e hora), `formato` (`presencial` | `teleconsulta`), `confirmacao` (`pendente` | `confirmada` | `nao_confirmada`), `situacao` (`agendada` | `compareceu` | `faltou` | `desmarcou`), `motivo_id` (se desmarcou), `consulta_id` (preenchido quando a consulta é registrada).
 
 **`consultas`** (versão simples da Fase 1; expandida na Fase 3) — `paciente_id`, `data`, `numero` (1ª, 2ª, 3ª... calculado automaticamente), `retornar_em_meses` (1, 2, 3, 4, 6, 12) **ou** `retornar_em_data`, `data_prevista_retorno` (calculada), `agendamento_id`.
 
@@ -169,7 +170,8 @@ A idade **não é guardada**: é calculada na hora a partir da data de nasciment
 
 #### Financeiro
 
-**`lancamentos`** — `paciente_id`, `tipo` (`consulta_avulsa` | `plano` | `retorno` | `outro`), `plano_meses` (3/4/6 quando for plano), `descricao`, `valor` (R$, 2 casas), `vencimento`, `forma_pagamento` (`pix` | `credito` | `debito` | `dinheiro` | `transferencia` | `boleto`), `pago` (a "caixinha de pago"), `pago_em`, `consulta_id`, `plano_id`.
+**`lancamentos`** — `paciente_id`, `tipo` (`consulta_avulsa` | `plano` | `retorno` | `outro`), `plano_meses` (3/4/6 quando for plano), `descricao`, `valor` (R$, 2 casas), `vencimento`, `forma_pagamento` (`pix` | `credito` | `debito` | `dinheiro` | `transferencia` | `boleto`), `parcelas_cartao` (1 a 12, só para cartão de crédito — informativo: o paciente passa o cartão de uma vez, então o lançamento já nasce **pago**), `pago` (a "caixinha de pago"), `pago_em`, `consulta_id`, `plano_id`.
+- Plano à vista ou parcelado no cartão: é **um único lançamento** pelo valor total; não existem parcelas a receber da paciente. "A receber" e "pagamento atrasado" valem para lançamentos não pagos (ex.: Pix ou boleto combinados para depois).
 
 #### Auditoria
 
@@ -193,7 +195,7 @@ A idade **não é guardada**: é calculada na hora a partir da data de nasciment
 | `registrar_resultado_contato(tarefa, resultado, ...)` | Registra o contato, conclui a tarefa, cria a próxima tentativa da cadência ou devolve a sugestão de nova etapa (ex.: 3ª tentativa sem resposta → sugerir "Sem resposta"). |
 | `iniciar_plano` / `renovar_plano` / `encerrar_plano` | Ciclos de plano, tarefas de check-in semanal, renovação 15 dias antes do término, sugestão de lançamento financeiro. |
 | `marcar_pago(lancamento)` | Marca pago e conclui a tarefa de pagamento atrasado. |
-| `rotina_diaria()` | Roda às 03:00 (Brasília) via `pg_cron`: (1) consulta realizada com retorno vencido → "Retorno atrasado"; (2) em plano com retorno vencido → marcação + tarefa; (3) plano no término → tarefa de decisão; (4) reativações de 6 e 12 meses (sem duplicar; respeitando "não contatar"); (5) pagamentos vencidos → tarefa; (6) comparecimento não registrado → tarefa; (7) check-in semanal; (8) paciente em etapa ativa sem nenhuma tarefa aberta → tarefa "Definir próxima ação" (rede de segurança). |
+| `rotina_diaria()` | Roda às 03:00 (Brasília) via `pg_cron`: (1) consulta realizada com retorno vencido → "Retorno atrasado"; (2) em plano com retorno vencido → marcação + tarefa; (3) plano no término → tarefa de decisão; (4) reativações de 6 e 12 meses (sem duplicar; respeitando "não contatar"); (5) pagamentos vencidos → tarefa; (6) comparecimento não registrado → tarefa; (7) check-in semanal — tarefa "Enviar formulário de check-in" a cada 7 dias para pacientes em plano ativo; (8) paciente em etapa ativa sem nenhuma tarefa aberta → tarefa "Definir próxima ação" (rede de segurança). |
 
 "Próxima ação sempre definida": as telas não deixam salvar sem próxima ação, e a rotina da madrugada garante que ninguém ficou sem (item 8). Etapas que **não** exigem próxima ação: "Sem interesse" com "não pode recontatar", "Sem resposta" sem recontato agendado e "Inativo" com "não pode recontatar".
 
@@ -273,7 +275,7 @@ Navegação: no computador, menu lateral; no celular, barra inferior com **Hoje 
 
 > **Regra de ouro:** nunca cole senhas ou chaves aqui no chat, em e-mail ou em mensagem. Quando chegar a hora, eu te mostro exatamente onde colar (arquivo `.env.local` no seu computador e o painel da Vercel).
 
-Tudo abaixo usa **planos gratuitos**. Nenhum pede cartão de crédito, exceto a Anthropic, que só entra na Fase 2.
+Tudo abaixo usa **planos gratuitos**. Nenhum pede cartão de crédito.
 
 ### Passo 1 — GitHub (já existe)
 O repositório `institutocg/institutocg` já está criado e é onde estou trabalhando. Confirme apenas que ele está **privado** (GitHub → repositório → Settings → General → "Danger Zone" → visibilidade).
@@ -296,17 +298,10 @@ Limites do plano gratuito que você precisa conhecer:
 
 Até lá, você pode testar o sistema rodando no seu próprio computador. Se preferir, eu te ensino.
 
-### Passo 4 — Anthropic (10 min) — só antes da Fase 2
-A API da Anthropic é paga por uso (não tem plano gratuito permanente). Para um consultório o custo é baixo; estimo US$ 5–30/mês. Na hora:
-1. Crie a conta em console.anthropic.com e cadastre o cartão.
-2. Defina um **limite de gastos mensal** (ex.: US$ 10) em Settings → Limits.
-3. Gere uma chave de API chamada `ng-clinic` (eu te aviso quando).
-
 ### Custos
 | Serviço | Custo |
 |---|---|
 | GitHub, Supabase Free, Vercel Hobby | R$ 0 |
-| Anthropic (a partir da Fase 2) | por uso, com limite definido por você |
 
 ### Quando sair da fase de teste (para lembrar depois)
 Quando começar a cadastrar pacientes reais e usar o sistema todos os dias, vale reavaliar dois pontos:
@@ -325,17 +320,18 @@ Nada disso muda o código. É só trocar o plano no painel.
 4. **CPF:** guardado só com dígitos, com índice único (impede duplicado). Fica protegido pela criptografia do disco do Supabase (AES-256), pela conexão criptografada (TLS) e pelo RLS. Não uso criptografia adicional por coluna porque impediria a checagem de duplicidade e a busca, sem ganho real de segurança neste cenário.
 5. **CEP:** consulta ao ViaCEP feita **pelo servidor** (o navegador não fala com serviços de terceiros).
 6. **PDFs (Fases 2 e 3):** recomendo **Puppeteer + `@sparticuz/chromium`** numa função da Vercel em São Paulo — gera o PDF a partir da mesma página HTML A4 que você vê na tela (fidelidade total de fontes, cores e gráficos), sem enviar dados a serviços externos de PDF.
-7. **IA (Fase 2+):** antes de enviar qualquer texto à Anthropic, o servidor remove automaticamente nome, CPF, telefone, e-mail e endereço do paciente (inclusive se estiverem no texto colado do Afya) e substitui por iniciais. Você poderá ver exatamente o que foi enviado.
+7. **Sem IA:** nenhum dado de paciente sai do sistema. O código fica organizado para, se um dia você quiser, acrescentar IA sem refazer o resto.
 8. **Exclusão de pacientes:** padrão é **arquivar**. Exclusão definitiva só por você, com confirmação e registro no log.
 9. **Testes automatizados** das regras de etapas e da rotina diária (é a parte mais crítica: se falhar, pacientes "somem" da tela Hoje).
 
 ---
 
-## F. Perguntas para você
+## F. Decisões tomadas (respostas da médica, 10/11/2026)
 
-1. **Campos obrigatórios no "Novo contato".** Quem chega pelo Instagram normalmente não informa CPF nem data de nascimento. Proposta: no novo contato, obrigatórios só **nome, telefone, origem e canal**; **CPF e data de nascimento** passam a ser obrigatórios ao **agendar a consulta**. Concorda?
-2. **Pagamento do plano.** O plano é pago de uma vez ou em parcelas (ex.: mensalidades)? Se puder ser parcelado, ao criar o plano o sistema gera as parcelas com vencimentos. Também incluí o campo **vencimento** nos lançamentos (necessário para "a receber" e "pagamento atrasado") — ok?
-3. **Retornos agendados.** Não existe etapa "retorno agendado" (combinado). Mas, quando um paciente em cuidado **marca** o retorno, você quer registrar o agendamento (para gerar a tarefa de confirmação na véspera), sem mudar a etapa dele? Recomendo que sim.
-4. **Check-in semanal na Fase 1.** O módulo de check-in é da Fase 4. Na Fase 1 posso já criar a tarefa semanal "Enviar formulário de check-in" para pacientes em plano (sem o resumo por IA). Quer?
-5. **Pacientes existentes.** Você tem hoje uma planilha de pacientes para importar? Se sim, a importação vira uma etapa própria no fim da Fase 1.
-6. **Sexo.** Opções "Feminino", "Masculino" e "Outro"? (Nas Fases 3/4 o sexo biológico influencia metas de exames; podemos ter um campo separado se necessário.)
+1. **Novo contato:** obrigatórios nome, telefone, origem e canal. CPF, data de nascimento e sexo obrigatórios ao agendar a consulta.
+2. **Pagamento do plano:** à vista ou parcelado no cartão; em ambos os casos o cartão é passado na hora → um lançamento, já pago, com o número de parcelas anotado.
+3. **Retornos marcados:** registrados como agendamento, sem mudar a etapa; geram confirmação na véspera.
+4. **Check-in semanal:** tarefa semanal "Enviar formulário de check-in" já na Fase 1.
+5. **Importação de planilha:** não haverá.
+6. **Sexo:** feminino ou masculino.
+7. **IA:** fora do sistema. Textos-base e mapa de conexões redigidos na construção e aprovados pela médica.
