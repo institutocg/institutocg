@@ -15,15 +15,16 @@ Sistema web complementar ao prontuário (Afya Clinic) de um consultório médico
 
 ## Fases
 
-1. Login e segurança (2FA), cadastro, CRM completo (etapas, motivos, previsão de retorno, plano de acompanhamento, reativação, tela "Hoje", kanban, linha do tempo), financeiro, dashboard de gestão/CRM/financeiro. Registro **simples** de consulta (data, tipo, "Retornar em").
+1. Login (e-mail e senha), cadastro, CRM completo (etapas, motivos, previsão de retorno, plano de acompanhamento, reativação, tela "Hoje", kanban, linha do tempo), financeiro, dashboard de gestão/CRM/financeiro. Registro **simples** de consulta (data, tipo, "Retornar em").
 2. Biblioteca de diretrizes e slides pré-consulta.
 3. Consultas completas, exames e metas, resumo da consulta, "Entenda seu diagnóstico".
 4. Check-in semanal, relatório de obesidade, indicadores clínicos.
 
-## Regras de LGPD e segurança (inegociáveis)
+## Regras de segurança e privacidade (inegociáveis)
 
 - **Dados de saúde são dados sensíveis.** Row-level security (RLS) habilitado em **todas** as tabelas, sem exceção, inclusive tabelas de configuração. Nenhuma política para o papel `anon`.
-- Acesso aos dados só com usuário autenticado **com 2FA concluído** (sessão `aal2`) e cadastrado como membro ativo da equipe. Checado no banco (RLS) e na aplicação (middleware).
+- Acesso aos dados só com usuário autenticado (e-mail e senha; **sem 2FA** por decisão da usuária) e cadastrado como membro ativo da equipe. Checado no banco (RLS) e na aplicação (middleware). Cadastro público de contas desligado.
+- Uso pessoal da médica (único usuário por enquanto). Fase de teste em **planos gratuitos** (Supabase Free, Vercel Hobby): sem backup automático, então manter a exportação manual de cópia de segurança. Não depender de recursos pagos.
 - Banco no Supabase região São Paulo; funções da Vercel na região `gru1`.
 - **Auditoria:** toda inclusão/alteração/exclusão em tabelas com dados de pacientes é registrada por trigger no `audit_log` (quem, quando, antes/depois). Visualização de ficha, exportações e envios também são registrados. O log é somente-inclusão (ninguém edita nem apaga).
 - **IA (Anthropic):** chamada **somente pelo servidor**; a chave nunca vai para o navegador nem para variáveis `NEXT_PUBLIC_*`. Nunca enviar nome, CPF, endereço, telefone, e-mail, dados financeiros ou qualquer identificador direto. Enviar apenas dados pseudonimizados (iniciais, idade, sexo, problemas, exames, texto clínico). Textos colados (ex.: do Afya) passam por remoção automática de identificadores antes do envio. O nome só é inserido no documento final, dentro do sistema.

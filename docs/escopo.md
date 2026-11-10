@@ -11,13 +11,13 @@ Construir em FASES: começar pela Fase 1 e só avançar para a próxima após ap
 
 - Médica que atende pacientes com doenças crônicas e metabólicas (diabetes, obesidade, hipertensão, dislipidemia, hipotireoidismo, osteoporose, menopausa, entre outras).
 - O sistema é COMPLEMENTAR ao prontuário (Afya Clinic). Ele NÃO é um prontuário. Serve para: gestão de pacientes (CRM), gestão financeira simples, materiais educativos para o paciente e acompanhamento da evolução.
-- Usuários: a médica (administradora) e, futuramente, uma secretária.
+- Usuários: a médica (administradora), uso pessoal. Futuramente, talvez uma secretária.
 - Idioma: português do Brasil. Datas no formato dd/mm/aaaa, valores em reais (R$) e fuso horário de Brasília. Tem que funcionar bem no celular e no computador.
 
 ## 2. Segurança e LGPD (obrigatório desde a Fase 1)
 
-- Login com e-mail e senha, e autenticação em dois fatores.
-- Dados de saúde são dados sensíveis: row-level security em TODAS as tabelas, banco hospedado no Brasil, criptografia em trânsito e em repouso, backups automáticos.
+- Login com e-mail e senha. ~~Autenticação em dois fatores~~ (removida em 10/11/2026 — ver histórico).
+- Dados de saúde são dados sensíveis: row-level security em TODAS as tabelas, banco hospedado no Brasil, criptografia em trânsito e em repouso. Backups: na fase de teste (plano gratuito), exportação manual de cópia de segurança.
 - Registro de log de acesso e de alterações (quem viu e quem editou o quê, e quando).
 - Ao enviar dados para a IA gerar materiais, NÃO enviar nome, CPF, endereço, contato nem dados financeiros. Enviar apenas dados pseudonimizados (iniciais, idade, sexo, problemas, exames, texto clínico). O nome só é inserido no documento final, dentro do sistema.
 - Todo conteúdo gerado por IA nasce como RASCUNHO e só pode ser exportado ou enviado depois que a médica marcar "Revisado e aprovado".
@@ -258,9 +258,9 @@ Exportação em PDF, com uma opção para copiar o link ou enviar por WhatsApp.
 ## 15. Stack definida
 
 - Next.js (App Router) com TypeScript, Tailwind CSS e shadcn/ui
-- Supabase: banco Postgres, autenticação (com 2FA/MFA por aplicativo autenticador), Storage para os laudos e documentos (buckets PRIVADOS, acesso só por URL assinada e temporária) e row-level security em TODAS as tabelas
+- Supabase (plano Free na fase de teste): banco Postgres, autenticação por e-mail e senha, Storage para os laudos e documentos (buckets PRIVADOS, acesso só por URL assinada e temporária) e row-level security em TODAS as tabelas
 - Projeto do Supabase na região South America (São Paulo)
-- Deploy na Vercel, com as funções na região de São Paulo (gru1)
+- Deploy na Vercel (plano Hobby na fase de teste), com as funções na região de São Paulo (gru1)
 - IA: API da Anthropic (Claude), chamada SOMENTE pelo servidor (rotas de API/server actions). A chave nunca vai para o navegador.
 - Gráficos: Recharts
 - PDFs: gerados a partir de páginas HTML no formato A4, com uma solução que funcione bem na Vercel
@@ -271,7 +271,7 @@ Exportação em PDF, com uma opção para copiar o link ou enviar por WhatsApp.
 ## 16. Ordem de construção e forma de trabalho
 
 Fases:
-- **Fase 1:** login e segurança; cadastro; CRM completo (etapas, motivos, previsão de retorno, plano de acompanhamento, reativação, tela "Hoje", kanban, linha do tempo); financeiro; dashboard (indicadores de gestão, CRM e financeiro). Na Fase 1, ainda sem o módulo clínico, criar um registro simples de consulta (data, tipo e "Retornar em: X meses") para que o CRM e os retornos já funcionem. Na Fase 3 ele será expandido.
+- **Fase 1:** login (e-mail e senha); cadastro; CRM completo (etapas, motivos, previsão de retorno, plano de acompanhamento, reativação, tela "Hoje", kanban, linha do tempo); financeiro; dashboard (indicadores de gestão, CRM e financeiro). Na Fase 1, ainda sem o módulo clínico, criar um registro simples de consulta (data, tipo e "Retornar em: X meses") para que o CRM e os retornos já funcionem. Na Fase 3 ele será expandido.
 - **Fase 2:** biblioteca de diretrizes e slides pré-consulta.
 - **Fase 3:** consultas completas, exames e metas, resumo da consulta e "Entenda seu diagnóstico".
 - **Fase 4:** check-in semanal, relatório de obesidade e indicadores clínicos no dashboard.
@@ -291,3 +291,4 @@ Forma de trabalho:
 | Data | Alteração | Motivo |
 |---|---|---|
 | 10/11/2026 | Versão inicial | Escopo enviado pela médica |
+| 10/11/2026 | Removida a autenticação em dois fatores (login só com e-mail e senha); uso pessoal, não comercial; planos gratuitos (Supabase Free, Vercel Hobby) na fase de teste; sem documentos de LGPD para pacientes | Simplificação pedida pela médica |

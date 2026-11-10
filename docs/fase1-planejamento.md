@@ -1,7 +1,7 @@
 # NG Clinic — Planejamento da Fase 1
 
 > Documento para revisão e aprovação. **Nenhum código, banco ou serviço foi criado ainda.**
-> Data: 10/11/2026
+> Data: 10/11/2026 · **Revisão 2 (10/11/2026):** login só com e-mail e senha (sem 2FA), uso pessoal, planos gratuitos na fase de teste, sem documentos de LGPD para pacientes.
 
 Este documento tem quatro partes:
 
@@ -17,7 +17,7 @@ Este documento tem quatro partes:
 ## A. Visão geral
 
 ```
- Você / secretária (celular ou computador)
+ Você (celular ou computador)
           │  conexão criptografada (HTTPS)
           ▼
  ┌───────────────────────────────┐
@@ -27,10 +27,10 @@ Este documento tem quatro partes:
                 │
  ┌──────────────▼────────────────┐
  │ Supabase — São Paulo          │  • Banco de dados (Postgres), criptografado
- │                               │  • Login + 2 fatores (aplicativo autenticador)
+ │                               │  • Login com e-mail e senha
  │                               │  • Regras de acesso linha a linha (RLS)
  │                               │  • Rotina automática toda madrugada (03:00)
- │                               │  • Backup diário
+ │                               │  • Cópia de segurança: exportação manual (plano gratuito)
  └───────────────────────────────┘
         (Fase 2 em diante)  ──►  Anthropic (IA) — só recebe dados sem nome/CPF/contato
 ```
@@ -52,7 +52,7 @@ Pense no banco como um arquivo com gavetas. As principais:
 
 | Gaveta | O que guarda |
 |---|---|
-| **Equipe** | Quem pode entrar no sistema (você = administradora; secretária no futuro). |
+| **Equipe** | Quem pode entrar no sistema (por enquanto só você; a estrutura já fica pronta para uma secretária no futuro). |
 | **Pacientes** | O cadastro (seção 3 do escopo) + etapa atual, data da última consulta e data prevista de retorno. |
 | **Problemas de saúde do paciente** | A lista de problemas de cada paciente, com um marcado como principal. |
 | **Histórico de etapas** | Cada vez que o paciente muda de etapa: qual etapa, quando entrou, quando saiu e os dados do formulário (valor ofertado, motivo, "posso recontatar?" etc.). É daqui que saem o funil e o tempo em cada etapa. |
@@ -130,7 +130,7 @@ Convenções: toda tabela tem `id uuid`, `criado_em`, `atualizado_em`, `criado_p
 - Origem: `origem_id`, `indicado_por_paciente_id`, `indicado_por_nome` (médico), `canal_primeiro_contato` (`whatsapp` | `instagram`), `primeiro_contato_em`
 - `motivo_consulta`, `modalidade` (`avulsa` | `plano`), `observacoes`
 - Situação no CRM (mantida automaticamente): `etapa`, `etapa_desde`, `data_ultima_consulta`, `data_prevista_retorno`, `retorno_atrasado` (marcação para quem está em plano), `nao_contatar` ("Não quero ser contatado")
-- `arquivado_em` (em vez de apagar; apagar de verdade só por pedido do paciente — direito LGPD)
+- `arquivado_em` (em vez de apagar; exclusão definitiva só quando você pedir)
 
 A idade **não é guardada**: é calculada na hora a partir da data de nascimento.
 
@@ -202,22 +202,22 @@ A idade **não é guardada**: é calculada na hora a partir da data de nasciment
 RLS = cada linha de cada tabela só é entregue a quem a regra permite. A regra é verificada **dentro do banco**, então vale mesmo que alguém tente acessar o banco "por fora" da aplicação.
 
 Duas funções-base:
-- `eh_equipe()` → o usuário está logado, **concluiu o segundo fator** (sessão `aal2`) e está ativo na tabela `equipe`.
+- `eh_equipe()` → o usuário está logado (e-mail e senha) e está ativo na tabela `equipe`.
 - `eh_admin()` → `eh_equipe()` e papel `admin`.
 
 | Tabelas | Ver | Criar / editar | Apagar |
 |---|---|---|---|
 | `pacientes`, `paciente_problemas`, `etapas_historico`, `agendamentos`, `consultas`, `planos_acompanhamento`, `tarefas`, `contatos`, `reativacoes` | equipe | equipe | ninguém (arquivar) — exclusão definitiva só pela admin, via função específica com registro no log |
-| `lancamentos` | equipe* | equipe* | admin |
+| `lancamentos` | equipe | equipe | admin |
 | `configuracoes`, `origens`, `motivos`, `condicoes`, `modelos_mensagem` | equipe | admin | admin |
 | `equipe` | a própria linha; admin vê todas | admin | ninguém (desativar) |
 | `audit_log` | admin | ninguém diretamente (só triggers/funções do sistema) | ninguém |
 
-\* depende da sua resposta à pergunta 2 (secretária vê financeiro?).
+Por enquanto só existe você (admin). Se um dia entrar uma secretária, definimos as permissões dela nessa hora.
 
 Outras proteções:
 - Papel `anon` (visitante não logado) sem acesso a nenhuma tabela.
-- Cadastro público de contas **desligado**: só a admin convida novos usuários.
+- Cadastro público de contas **desligado**: ninguém consegue criar uma conta sozinho pela internet.
 - Chave secreta do Supabase só no servidor, usada apenas para convidar usuários.
 - Teste automatizado que falha se alguma tabela for criada sem RLS.
 
@@ -227,7 +227,7 @@ Outras proteções:
 
 Navegação: no computador, menu lateral; no celular, barra inferior com **Hoje · Pacientes · Quadro · Financeiro · Mais**.
 
-1. **Entrar** — e-mail e senha → código de 6 dígitos do aplicativo autenticador. No primeiro acesso: tela com QR code para cadastrar o aplicativo. "Esqueci a senha" por e-mail. Sessão expira após inatividade.
+1. **Entrar** — e-mail e senha. "Esqueci a senha" por e-mail. Sessão expira após um período sem uso.
 
 2. **Hoje** (tela inicial)
    - Frase-resumo no topo: "Hoje: 3 novos contatos para responder, 2 confirmações, 4 retornos para lembrar."
@@ -253,7 +253,7 @@ Navegação: no computador, menu lateral; no celular, barra inferior com **Hoje 
 
 9. **Dashboard** — filtro de período (mês atual, últimos 3 meses, ano, personalizado); indicadores da seção 6 em blocos: Pacientes · Funil · Origem · Motivos · Faltas e tempos · Planos · Retornos e reativação · Oportunidades · Financeiro. Cada número que representa pacientes é clicável e abre a lista.
 
-10. **Configurações** (só admin) — Prazos · Origens · Motivos · Problemas de saúde · Modelos de mensagem · Dados da clínica · Equipe (convidar secretária, desativar acesso) · Registro de auditoria (com filtros por paciente, usuário e período).
+10. **Configurações** (só admin) — Prazos · Origens · Motivos · Problemas de saúde · Modelos de mensagem · Dados da clínica · Registro de auditoria (com filtros por paciente e período) · **Exportar cópia de segurança** (baixa todos os dados num arquivo, para você guardar — substitui o backup automático que o plano gratuito não tem).
 
 ### Indicadores extras que sugiro para o dashboard
 
@@ -273,49 +273,47 @@ Navegação: no computador, menu lateral; no celular, barra inferior com **Hoje 
 
 > **Regra de ouro:** nunca cole senhas ou chaves aqui no chat, em e-mail ou em mensagem. Quando chegar a hora, eu te mostro exatamente onde colar (arquivo `.env.local` no seu computador e o painel da Vercel).
 
-### Passo 0 — Aplicativo autenticador (5 min)
-Instale no celular um aplicativo autenticador: Google Authenticator, Microsoft Authenticator ou 1Password. Use-o também para proteger as contas abaixo (GitHub, Supabase, Vercel, Anthropic) — todas aceitam dois fatores e **devem** tê-lo ligado, porque quem invade essas contas acessa os dados.
+Tudo abaixo usa **planos gratuitos**. Nenhum pede cartão de crédito, exceto a Anthropic, que só entra na Fase 2.
 
 ### Passo 1 — GitHub (já existe)
-O repositório `institutocg/institutocg` já está criado e é onde estou trabalhando. Confirme apenas que ele está **privado** (GitHub → repositório → Settings → General → "Danger Zone" → visibilidade). Ative 2FA na sua conta GitHub (Settings → Password and authentication).
+O repositório `institutocg/institutocg` já está criado e é onde estou trabalhando. Confirme apenas que ele está **privado** (GitHub → repositório → Settings → General → "Danger Zone" → visibilidade).
 
-### Passo 2 — Supabase (20 min)
-1. Crie a conta em supabase.com (pode entrar com o GitHub). Ative o 2FA da conta.
-2. Crie uma **Organization** e assine o plano **Pro** (US$ 25/mês). Motivo: o plano gratuito não tem backups diários e pausa o projeto se ficar parado; para dados de saúde reais, o Pro é necessário.
-3. Crie o projeto: nome `ng-clinic`, **Region: South America (São Paulo)**. Gere uma senha forte do banco e guarde num gerenciador de senhas.
-4. Em **Authentication → Sign In / Providers**: desligue "Allow new users to sign up" (só você convida). Em **Authentication → Multi-Factor**: confirme que **TOTP (app authenticator)** está habilitado.
-5. Em **Organization → Legal Documents**: baixe/assine o **DPA** (acordo de tratamento de dados) — é um documento importante para a LGPD.
-6. Me avise quando terminar. Eu vou te pedir para copiar 3 informações de **Project Settings → API** (URL do projeto, chave pública e chave secreta) e te mostro onde colar.
-7. (Opcional, recomendado antes de ir para produção) Considerar o adicional **PITR** (recuperação em qualquer ponto no tempo) — permite voltar o banco para qualquer minuto dos últimos dias.
+### Passo 2 — Supabase, plano Free (15 min)
+1. Crie a conta em supabase.com (pode entrar com o GitHub).
+2. Crie o projeto: nome `ng-clinic`, **Region: South America (São Paulo)**. Gere uma senha forte do banco e guarde num lugar seguro (ex.: gerenciador de senhas do celular).
+3. Em **Authentication → Sign In / Providers**: desligue "Allow new users to sign up" (assim ninguém cria conta sozinho).
+4. Me avise quando terminar. Vou te pedir para copiar 3 informações de **Project Settings → API** (URL do projeto, chave pública e chave secreta) e te mostro onde colar.
 
-### Passo 3 — Vercel (15 min) — pode ficar para o fim da Fase 1
-1. Crie a conta em vercel.com entrando com o GitHub. Ative o 2FA.
-2. Assine o plano **Pro** (US$ 20/mês por usuário). O plano gratuito (Hobby) não permite uso comercial.
-3. "Add New → Project" → importar `institutocg/institutocg`. Eu deixo a região São Paulo (gru1) configurada no código.
-4. Eu te guio para colar as variáveis (chaves) em **Settings → Environment Variables**.
-5. (Opcional) Domínio próprio, ex.: `app.ngclinic.com.br` (registro.br, ~R$ 40/ano).
+Limites do plano gratuito que você precisa conhecer:
+- **Pausa por inatividade:** se ninguém usar o sistema por 7 dias, o projeto é pausado. Para voltar, basta entrar no painel do Supabase e clicar em "Restore" (os dados não se perdem).
+- **Sem backup automático:** por isso incluí o botão "Exportar cópia de segurança" em Configurações.
+- **500 MB de banco:** muito mais do que um consultório precisa nesta fase.
+
+### Passo 3 — Vercel, plano Hobby (10 min) — pode ficar para o fim da Fase 1
+1. Crie a conta em vercel.com entrando com o GitHub.
+2. "Add New → Project" → importar `institutocg/institutocg`. Eu deixo a região São Paulo (gru1) configurada no código.
+3. Eu te guio para colar as variáveis (chaves) em **Settings → Environment Variables**.
+
+Até lá, você pode testar o sistema rodando no seu próprio computador. Se preferir, eu te ensino.
 
 ### Passo 4 — Anthropic (10 min) — só antes da Fase 2
-1. Crie a conta em console.anthropic.com, ative 2FA, cadastre o cartão.
-2. Defina um **limite de gastos mensal** (ex.: US$ 30) em Settings → Limits.
-3. Gere uma chave de API chamada `ng-clinic-producao` (eu te aviso quando).
-4. Leia/aceite os termos comerciais e o DPA da Anthropic.
+A API da Anthropic é paga por uso (não tem plano gratuito permanente). Para um consultório o custo é baixo; estimo US$ 5–30/mês. Na hora:
+1. Crie a conta em console.anthropic.com e cadastre o cartão.
+2. Defina um **limite de gastos mensal** (ex.: US$ 10) em Settings → Limits.
+3. Gere uma chave de API chamada `ng-clinic` (eu te aviso quando).
 
-### Passo 5 — Documentos de LGPD (fora do sistema, com apoio jurídico)
-Não sou advogado, mas um consultório que usa este sistema normalmente precisa de:
-- **Aviso de privacidade** para pacientes (quais dados, para quê, com quem compartilha — Supabase, Vercel, Anthropic).
-- **Termo de consentimento** para dados de saúde e para o uso de IA na produção de materiais educativos (com dados pseudonimizados, processados nos EUA).
-- **Encarregado de dados (DPO)** indicado — em consultório pequeno costuma ser a própria médica.
-- Os DPAs (acordos) dos fornecedores arquivados.
-Recomendo revisão por advogado(a) especializado(a) em saúde/LGPD.
-
-### Custos mensais estimados
+### Custos
 | Serviço | Custo |
 |---|---|
-| Supabase Pro | US$ 25 (+ PITR opcional) |
-| Vercel Pro | US$ 20 |
-| Anthropic (a partir da Fase 2) | por uso; estimo US$ 5–30/mês para um consultório |
-| Domínio (opcional) | ~R$ 40/ano |
+| GitHub, Supabase Free, Vercel Hobby | R$ 0 |
+| Anthropic (a partir da Fase 2) | por uso, com limite definido por você |
+
+### Quando sair da fase de teste (para lembrar depois)
+Quando começar a cadastrar pacientes reais e usar o sistema todos os dias, vale reavaliar dois pontos:
+- O **Supabase Pro** (US$ 25/mês) traz backup automático diário e não pausa o projeto.
+- O plano Hobby da Vercel é para **uso pessoal e não comercial**. Se o sistema passar a fazer parte da rotina do consultório, os termos da Vercel podem exigir o plano Pro.
+
+Nada disso muda o código. É só trocar o plano no painel.
 
 ---
 
@@ -323,12 +321,12 @@ Recomendo revisão por advogado(a) especializado(a) em saúde/LGPD.
 
 1. **Rotina diária no `pg_cron` do Supabase (não no Vercel Cron).** Roda dentro do banco, em São Paulo, sem precisar abrir um endereço público na internet para disparar a rotina, e tudo acontece numa única transação (ou faz tudo, ou não faz nada). Horário: 03:00 de Brasília = 06:00 UTC (o Brasil não tem mais horário de verão).
 2. **Regras de negócio em funções do Postgres** (ver B.4): uma única fonte da verdade para tela, kanban e rotina.
-3. **2FA verificado também no banco** (sessão `aal2` nas políticas RLS), não só na tela.
+3. **Login com e-mail e senha** (sem 2FA, por decisão sua). A estrutura do Supabase permite ligar o 2FA no futuro sem refazer nada.
 4. **CPF:** guardado só com dígitos, com índice único (impede duplicado). Fica protegido pela criptografia do disco do Supabase (AES-256), pela conexão criptografada (TLS) e pelo RLS. Não uso criptografia adicional por coluna porque impediria a checagem de duplicidade e a busca, sem ganho real de segurança neste cenário.
 5. **CEP:** consulta ao ViaCEP feita **pelo servidor** (o navegador não fala com serviços de terceiros).
 6. **PDFs (Fases 2 e 3):** recomendo **Puppeteer + `@sparticuz/chromium`** numa função da Vercel em São Paulo — gera o PDF a partir da mesma página HTML A4 que você vê na tela (fidelidade total de fontes, cores e gráficos), sem enviar dados a serviços externos de PDF.
 7. **IA (Fase 2+):** antes de enviar qualquer texto à Anthropic, o servidor remove automaticamente nome, CPF, telefone, e-mail e endereço do paciente (inclusive se estiverem no texto colado do Afya) e substitui por iniciais. Você poderá ver exatamente o que foi enviado.
-8. **Exclusão de pacientes:** padrão é **arquivar**. Exclusão definitiva (direito do titular na LGPD) só pela admin, com confirmação e registro no log.
+8. **Exclusão de pacientes:** padrão é **arquivar**. Exclusão definitiva só por você, com confirmação e registro no log.
 9. **Testes automatizados** das regras de etapas e da rotina diária (é a parte mais crítica: se falhar, pacientes "somem" da tela Hoje).
 
 ---
@@ -336,9 +334,8 @@ Recomendo revisão por advogado(a) especializado(a) em saúde/LGPD.
 ## F. Perguntas para você
 
 1. **Campos obrigatórios no "Novo contato".** Quem chega pelo Instagram normalmente não informa CPF nem data de nascimento. Proposta: no novo contato, obrigatórios só **nome, telefone, origem e canal**; **CPF e data de nascimento** passam a ser obrigatórios ao **agendar a consulta**. Concorda?
-2. **Permissões da secretária.** Proposta: ela vê e usa tudo do CRM (Hoje, pacientes, quadro, agendamentos, registrar contatos) e **lança/marca pagamentos**, mas **não** vê o dashboard financeiro, Configurações nem o registro de auditoria. Concorda? Ela deve ver os problemas de saúde dos pacientes? (Ela precisa deles para personalizar mensagens de reativação.)
-3. **Pagamento do plano.** O plano é pago de uma vez ou em parcelas (ex.: mensalidades)? Se puder ser parcelado, ao criar o plano o sistema gera as parcelas com vencimentos. Também incluí o campo **vencimento** nos lançamentos (necessário para "a receber" e "pagamento atrasado") — ok?
-4. **Retornos agendados.** Não existe etapa "retorno agendado" (combinado). Mas, quando um paciente em cuidado **marca** o retorno, você quer registrar o agendamento (para gerar a tarefa de confirmação na véspera), sem mudar a etapa dele? Recomendo que sim.
-5. **Check-in semanal na Fase 1.** O módulo de check-in é da Fase 4. Na Fase 1 posso já criar a tarefa semanal "Enviar formulário de check-in" para pacientes em plano (sem o resumo por IA). Quer?
-6. **Pacientes existentes.** Você tem hoje uma planilha de pacientes para importar? Se sim, a importação vira uma etapa própria no fim da Fase 1.
-7. **Sexo.** Opções "Feminino", "Masculino" e "Outro"? (Nas Fases 3/4 o sexo biológico influencia metas de exames; podemos ter um campo separado se necessário.)
+2. **Pagamento do plano.** O plano é pago de uma vez ou em parcelas (ex.: mensalidades)? Se puder ser parcelado, ao criar o plano o sistema gera as parcelas com vencimentos. Também incluí o campo **vencimento** nos lançamentos (necessário para "a receber" e "pagamento atrasado") — ok?
+3. **Retornos agendados.** Não existe etapa "retorno agendado" (combinado). Mas, quando um paciente em cuidado **marca** o retorno, você quer registrar o agendamento (para gerar a tarefa de confirmação na véspera), sem mudar a etapa dele? Recomendo que sim.
+4. **Check-in semanal na Fase 1.** O módulo de check-in é da Fase 4. Na Fase 1 posso já criar a tarefa semanal "Enviar formulário de check-in" para pacientes em plano (sem o resumo por IA). Quer?
+5. **Pacientes existentes.** Você tem hoje uma planilha de pacientes para importar? Se sim, a importação vira uma etapa própria no fim da Fase 1.
+6. **Sexo.** Opções "Feminino", "Masculino" e "Outro"? (Nas Fases 3/4 o sexo biológico influencia metas de exames; podemos ter um campo separado se necessário.)
